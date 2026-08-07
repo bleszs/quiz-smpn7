@@ -2,6 +2,8 @@
 
 Kuis kelas bergaya Quizizz untuk materi MedanSimpang. Satu perangkat menjadi host, peserta bergabung dari perangkat masing-masing menggunakan kode room, dan leaderboard bersama ditampilkan setelah 10 soal selesai.
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fbleszs%2Fquiz-smpn7)
+
 ## Fitur
 
 - room enam karakter yang mudah dibagikan;
@@ -48,6 +50,8 @@ Tes otomatis membuat satu host dan beberapa peserta virtual, menjalankan seluruh
 ## Hosting
 
 Aplikasi membutuhkan hosting Node.js yang mendukung koneksi WebSocket persisten. Perintah produksinya adalah `npm start`; gunakan variabel lingkungan `PORT` bila disediakan oleh layanan hosting.
+
+Untuk deployment gratis, klik tombol **Deploy to Render** di atas. Blueprint akan membuat satu Web Service Node di region Singapura, menjalankan health check `/health`, dan mengaktifkan deployment otomatis setiap ada commit baru pada branch utama.
 
 Deployment statis atau membuka file HTML langsung tidak dapat menjalankan room realtime. Room saat ini disimpan di memori server dan otomatis dibersihkan setelah dua jam tidak aktif. Jika server dimulai ulang, room yang sedang berjalan ikut terhapus. Untuk penggunaan berskala besar atau beberapa instance server, penyimpanan room perlu dipindahkan ke Redis/database dan Socket.IO Redis adapter.
 
