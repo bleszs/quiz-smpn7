@@ -2,6 +2,8 @@
 
 Kuis kelas bergaya Quizizz untuk materi MedanSimpang. Satu perangkat menjadi host, peserta bergabung dari perangkat masing-masing menggunakan kode room, dan leaderboard bersama ditampilkan setelah 10 soal selesai.
 
+**Website:** [quiz-smpn7-production.up.railway.app](https://quiz-smpn7-production.up.railway.app)
+
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https%3A%2F%2Fgithub.com%2Fbleszs%2Fquiz-smpn7)
 
 ## Fitur
