@@ -106,6 +106,11 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
       CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(game_session_id, answered_at);
     `);
 
+    // Removes only records created by the automated production integration test.
+    await pool.query("DELETE FROM game_sessions WHERE settings_snapshot->>'title' LIKE 'Codex Integration %'");
+    await pool.query("DELETE FROM quizzes WHERE title LIKE 'Codex Integration %'");
+    await pool.query("DELETE FROM admins WHERE email LIKE 'codex-test-%@example.invalid'");
+
     const existing = await pool.query('SELECT id FROM quizzes WHERE deleted_at IS NULL LIMIT 1');
     if (existing.rowCount === 0 && Array.isArray(defaultQuestions) && defaultQuestions.length) {
       const quizId = crypto.randomUUID();
