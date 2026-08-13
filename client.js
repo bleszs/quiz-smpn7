@@ -6,7 +6,7 @@ const socket = io({
   randomizationFactor: 0.5,
   timeout: 15000,
   tryAllTransports: true,
-  transports: ['polling', 'websocket'],
+  transports: ['websocket', 'polling'],
   closeOnBeforeunload: true
 });
 
@@ -139,6 +139,7 @@ function renderHostLobby(snapshot) {
 function renderPlayerLobby(snapshot) {
   setRoom(snapshot.code);
   $('playerRoomCode').textContent = snapshot.code;
+  $('playerLobbyCount').textContent = `${snapshot.participantCount || 0} peserta`;
   if (state.player) $('playerIdentity').textContent = `${state.player.name} · ${state.player.className}`;
   showScreen('playerLobbyScreen');
 }
@@ -284,7 +285,7 @@ function revealAnswer(payload) {
   state.pendingAnswer = null;
   state.answerSending = false;
   state.leaderboard = payload.leaderboard || [];
-  const playerResult = payload.playerResults?.find((entry) => entry.id === state.participantId);
+  const playerResult = payload.playerResult || payload.playerResults?.find((entry) => entry.id === state.participantId);
   if (playerResult) {
     state.answerResult = { ...state.answerResult, ...playerResult };
     $('liveScore').textContent = playerResult.score.toLocaleString('id-ID');

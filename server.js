@@ -2,8 +2,13 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const path = require('node:path');
 const express = require('express');
+const session = require('express-session');
+const connectPgSimple = require('connect-pg-simple');
+const helmet = require('helmet');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
+const { createDatabase } = require('./src/database');
+const { createAdminRouter } = require('./src/admin-routes');
 
 const QUESTION_BANK = [
   { id: 1, category: 'Kawasan Silalas', question: 'Ada berapa walking trails yang ditampilkan di kawasan Silalas?', options: ['3 rute', '4 rute', '5 rute', '6 rute'], correct: '5 rute', explanation: 'Halaman Silalas menampilkan lima rute jalan kaki.', image: 'assets/kampung-silalas.jpg', alt: 'Suasana kawasan Silalas di Medan' },
@@ -46,8 +51,8 @@ function makeCode(rooms) {
   return crypto.randomBytes(4).toString('hex').slice(0, 6).toUpperCase();
 }
 
-function prepareQuestions() {
-  return shuffle(QUESTION_BANK).map((question) => {
+function prepareQuestions(source = QUESTION_BANK) {
+  return shuffle(source).map((question) => {
     const options = shuffle(question.options);
     return { ...question, options, correctIndex: options.indexOf(question.correct) };
   });
@@ -88,11 +93,24 @@ function createQuizServer(options = {}) {
   const revealDurationMs = options.revealDurationMs || Number(process.env.REVEAL_DURATION_MS) || 5_000;
   const app = express();
   app.set('trust proxy', 1);
+  const database = options.database || createDatabase(options.connectionString);
+  const allowedOrigins = new Set(
+    (process.env.ALLOWED_ORIGINS || 'https://quiz-smpn7-production.up.railway.app,https://urbanmorphsoc.com')
+      .split(',').map((origin) => origin.trim()).filter(Boolean)
+  );
+  const allowOrigin = (origin) => !origin || allowedOrigins.has(origin) || /^https?:\/\/localhost(?::\d+)?$/.test(origin);
   const httpServer = http.createServer(app);
   const io = new Server(httpServer, {
-    cors: { origin: true, credentials: true },
+    cors: {
+      origin(origin, callback) { callback(null, allowOrigin(origin)); },
+      credentials: true
+    },
     pingInterval: 10_000,
     pingTimeout: 20_000,
+    maxHttpBufferSize: 100_000,
+    allowRequest(request, callback) {
+      callback(null, allowOrigin(request.headers.origin));
+    },
     connectionStateRecovery: {
       maxDisconnectionDuration: 5 * 60 * 1000,
       skipMiddlewares: true
@@ -100,16 +118,53 @@ function createQuizServer(options = {}) {
   });
   const rooms = new Map();
 
+  const PgSession = connectPgSimple(session);
+  const sessionMiddleware = session({
+    name: 'medan_simpang_admin',
+    secret: process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex'),
+    resave: false,
+    saveUninitialized: false,
+    proxy: true,
+    store: database.enabled ? new PgSession({ pool: database.pool, createTableIfMissing: true }) : undefined,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 12 * 60 * 60 * 1000
+    }
+  });
+
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:'],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'"],
+        connectSrc: ["'self'", 'ws:', 'wss:']
+      }
+    }
+  }));
+  app.use(express.json({ limit: '200kb' }));
+  app.use(sessionMiddleware);
+  io.engine.use(sessionMiddleware);
+  const ready = database.initialize(QUESTION_BANK);
+
   app.disable('x-powered-by');
-  app.get('/health', (_request, response) => response.json({ ok: true, rooms: rooms.size }));
+  app.get('/health', (_request, response) => response.json({ ok: true, rooms: rooms.size, database: database.enabled }));
   app.get('/favicon.ico', (_request, response) => response.sendFile(path.join(__dirname, 'assets', 'favicon.ico')));
   app.get('/', (_request, response) => response.sendFile(path.join(__dirname, 'index.html')));
+  app.get('/join', (_request, response) => response.sendFile(path.join(__dirname, 'index.html')));
+  app.get('/game', (_request, response) => response.sendFile(path.join(__dirname, 'index.html')));
+  app.get(['/admin', '/admin/login'], (_request, response) => response.sendFile(path.join(__dirname, 'admin.html')));
   app.get('/styles.css', (_request, response) => response.sendFile(path.join(__dirname, 'styles.css')));
   app.get('/client.js', (_request, response) => response.sendFile(path.join(__dirname, 'client.js')));
+  app.get('/admin.js', (_request, response) => response.sendFile(path.join(__dirname, 'admin.js')));
+  app.use('/api/admin', createAdminRouter(database));
   app.get('/api/rooms/:code/qr', async (request, response) => {
     const code = cleanText(request.params.code, 6).toUpperCase();
     if (!rooms.has(code)) return response.status(404).json({ error: 'Room tidak ditemukan.' });
-    const joinUrl = `${request.protocol}://${request.get('host')}/?room=${encodeURIComponent(code)}`;
+    const joinUrl = `${request.protocol}://${request.get('host')}/join?room=${encodeURIComponent(code)}`;
     try {
       const svg = await QRCode.toString(joinUrl, {
         type: 'svg',
@@ -125,6 +180,10 @@ function createQuizServer(options = {}) {
     }
   });
   app.use('/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '7d', immutable: true }));
+  app.use((error, _request, response, _next) => {
+    console.error('HTTP request gagal:', error);
+    response.status(500).json({ ok: false, error: 'Terjadi kesalahan pada server.' });
+  });
 
   function clearRoomTimer(room) {
     if (room.timer) clearTimeout(room.timer);
@@ -142,12 +201,24 @@ function createQuizServer(options = {}) {
       participantCount: room.participants.size,
       participants: participantList(room),
       currentIndex: room.currentIndex,
-      totalQuestions: QUESTION_BANK.length
+      totalQuestions: room.questionDefinition?.length || QUESTION_BANK.length,
+      quizId: room.quizId || null,
+      quizTitle: room.quizTitle || 'Medan Simpang'
     };
   }
 
   function emitLobby(room) {
-    io.to(room.code).emit('room:lobby', roomSnapshot(room));
+    const snapshot = roomSnapshot(room);
+    if (room.hostSocketId) io.to(room.hostSocketId).emit('room:lobby', snapshot);
+    io.to(room.code).except(room.hostSocketId).emit('room:lobby', {
+      code: room.code,
+      status: room.status,
+      participantCount: room.participants.size,
+      currentIndex: room.currentIndex,
+      totalQuestions: room.questionDefinition?.length || QUESTION_BANK.length,
+      quizId: room.quizId || null,
+      quizTitle: room.quizTitle || 'Medan Simpang'
+    });
   }
 
   function emitRoster(room) {
@@ -169,10 +240,14 @@ function createQuizServer(options = {}) {
     };
   }
 
-  function finishRoom(room) {
+  async function finishRoom(room) {
     clearRoomTimer(room);
     room.status = 'finished';
     touch(room);
+    if (database.enabled && room.sessionId) {
+      try { await database.finishGameSession(room.sessionId, [...room.participants.values()]); }
+      catch (error) { console.error('Gagal menyimpan hasil game:', error); }
+    }
     io.to(room.code).emit('room:finished', finishedPayload(room));
   }
 
@@ -185,25 +260,43 @@ function createQuizServer(options = {}) {
       if (!participant.answered) participant.streak = 0;
     }
     const nextAt = Date.now() + revealDurationMs;
+    const standings = leaderboard(room);
+    const playerResults = new Map([...room.participants.values()].map((participant) => [participant.id, {
+      id: participant.id,
+      isCorrect: participant.answered && participant.answerIndex === question.correctIndex,
+      award: participant.lastAward,
+      score: participant.score
+    }]));
     room.lastReveal = {
       questionIndex: room.currentIndex,
       correctIndex: question.correctIndex,
       correctAnswer: question.correct,
       explanation: question.explanation,
-      leaderboard: leaderboard(room),
-      playerResults: [...room.participants.values()].map((participant) => ({
-        id: participant.id,
-        isCorrect: participant.answered && participant.answerIndex === question.correctIndex,
-        award: participant.lastAward,
-        score: participant.score
-      })),
+      leaderboard: standings,
       nextAt,
       isLast: room.currentIndex === room.questions.length - 1
     };
-    io.to(room.code).emit('room:reveal', room.lastReveal);
+    if (room.hostSocketId) {
+      io.to(room.hostSocketId).emit('room:reveal', {
+        ...room.lastReveal,
+        playerResults: [...playerResults.values()]
+      });
+    }
+    for (const participant of room.participants.values()) {
+      const topStandings = standings.slice(0, 10);
+      const selfStanding = standings.find((entry) => entry.id === participant.id);
+      const compactStandings = selfStanding && !topStandings.some((entry) => entry.id === participant.id)
+        ? [...topStandings, selfStanding]
+        : topStandings;
+      io.to(participant.socketId).emit('room:reveal', {
+        ...room.lastReveal,
+        leaderboard: compactStandings,
+        playerResult: playerResults.get(participant.id)
+      });
+    }
     touch(room);
     room.timer = setTimeout(() => {
-      if (room.currentIndex === room.questions.length - 1) finishRoom(room);
+      if (room.currentIndex === room.questions.length - 1) void finishRoom(room);
       else startQuestion(room, room.currentIndex + 1);
     }, revealDurationMs);
   }
@@ -213,7 +306,8 @@ function createQuizServer(options = {}) {
     room.status = 'question';
     room.currentIndex = index;
     room.questionStartedAt = Date.now();
-    room.questionEndsAt = room.questionStartedAt + questionDurationMs;
+    room.currentQuestionDurationMs = room.questions[index].timeLimitMs || questionDurationMs;
+    room.questionEndsAt = room.questionStartedAt + room.currentQuestionDurationMs;
     room.lastReveal = null;
     for (const participant of room.participants.values()) {
       participant.answered = false;
@@ -226,11 +320,15 @@ function createQuizServer(options = {}) {
       question: publicQuestion(room.questions[index]),
       startedAt: room.questionStartedAt,
       endsAt: room.questionEndsAt,
-      durationMs: questionDurationMs,
+      durationMs: room.currentQuestionDurationMs,
       participantCount: room.participants.size
     });
     touch(room);
-    room.timer = setTimeout(() => revealQuestion(room), questionDurationMs + 80);
+    if (database.enabled && room.sessionId) {
+      database.updateGameSession(room.sessionId, 'question', index, room.questionStartedAt)
+        .catch((error) => console.error('Gagal menyimpan posisi soal:', error));
+    }
+    room.timer = setTimeout(() => revealQuestion(room), room.currentQuestionDurationMs + 80);
   }
 
   function getRoom(rawCode) {
@@ -242,13 +340,33 @@ function createQuizServer(options = {}) {
   }
 
   io.on('connection', (socket) => {
-    socket.on('host:create', (payload = {}, ack) => {
+    socket.on('host:create', async (payload = {}, ack) => {
+      if (database.enabled && !socket.request.session?.adminId) {
+        return withAck(ack, { ok: false, error: 'Login admin diperlukan untuk membuat room.' });
+      }
       const hostName = cleanText(payload.hostName, 35);
       if (hostName.length < 2) return withAck(ack, { ok: false, error: 'Nama host minimal 2 karakter.' });
+      let quiz = null;
+      if (database.enabled) {
+        try { quiz = await database.getQuiz(payload.quizId); }
+        catch (error) {
+          console.error('Gagal membaca quiz:', error);
+          return withAck(ack, { ok: false, error: 'Quiz tidak dapat dimuat.' });
+        }
+        if (!quiz || quiz.status !== 'published' || !quiz.questions.length) {
+          return withAck(ack, { ok: false, error: 'Pilih quiz published yang memiliki pertanyaan.' });
+        }
+      }
       const code = makeCode(rooms);
       const hostToken = crypto.randomUUID();
+      const sessionId = crypto.randomUUID();
+      const questionDefinition = quiz?.questions || QUESTION_BANK;
       const room = {
         code,
+        sessionId,
+        quizId: quiz?.id || null,
+        quizTitle: quiz?.title || 'Medan Simpang',
+        questionDefinition,
         hostName,
         hostToken,
         hostSocketId: socket.id,
@@ -258,23 +376,38 @@ function createQuizServer(options = {}) {
         currentIndex: -1,
         questionStartedAt: 0,
         questionEndsAt: 0,
+        currentQuestionDurationMs: questionDurationMs,
         timer: null,
         lastReveal: null,
         createdAt: Date.now(),
         updatedAt: Date.now()
       };
+      if (database.enabled) {
+        try {
+          await database.createGameSession({
+            id: sessionId,
+            quizId: quiz.id,
+            roomCode: code,
+            snapshot: { title: quiz.title, questions: questionDefinition }
+          });
+        } catch (error) {
+          console.error('Gagal membuat game session:', error);
+          return withAck(ack, { ok: false, error: 'Game session tidak dapat disimpan.' });
+        }
+      }
       rooms.set(code, room);
       socket.join(code);
       socket.data = { roomCode: code, role: 'host' };
       withAck(ack, { ok: true, code, hostToken, snapshot: roomSnapshot(room) });
     });
 
-    socket.on('player:join', (payload = {}, ack) => {
+    socket.on('player:join', async (payload = {}, ack) => {
       const room = getRoom(payload.code);
       const name = cleanText(payload.name, 35);
       const className = cleanText(payload.className, 25);
       if (!room) return withAck(ack, { ok: false, error: 'Room tidak ditemukan. Periksa kembali kodenya.' });
       if (room.status !== 'lobby') return withAck(ack, { ok: false, error: 'Kuis di room ini sudah dimulai.' });
+      if (room.participants.size >= 150) return withAck(ack, { ok: false, error: 'Room sudah mencapai batas 150 peserta.' });
       if (name.length < 2 || !className) return withAck(ack, { ok: false, error: 'Isi nama dan kelas dengan lengkap.' });
       const duplicate = [...room.participants.values()].some((item) => item.name.toLowerCase() === name.toLowerCase() && item.className.toLowerCase() === className.toLowerCase());
       if (duplicate) return withAck(ack, { ok: false, error: 'Nama dan kelas tersebut sudah terdaftar di room.' });
@@ -294,6 +427,14 @@ function createQuizServer(options = {}) {
         connected: true,
         joinedAt: Date.now()
       };
+      if (database.enabled && room.sessionId) {
+        try { await database.addParticipant(room.sessionId, participant); }
+        catch (error) {
+          if (error.code === '23505') return withAck(ack, { ok: false, error: 'Nama dan kelas tersebut sudah terdaftar di room.' });
+          console.error('Gagal menyimpan peserta:', error);
+          return withAck(ack, { ok: false, error: 'Peserta tidak dapat disimpan.' });
+        }
+      }
       room.participants.set(participant.id, participant);
       socket.join(room.code);
       socket.data = { roomCode: room.code, role: 'player', participantId: participant.id };
@@ -306,6 +447,9 @@ function createQuizServer(options = {}) {
       const room = getRoom(payload.code);
       if (!room) return withAck(ack, { ok: false, error: 'Room sudah tidak tersedia.' });
       if (payload.role === 'host' && payload.token === room.hostToken) {
+        if (database.enabled && !socket.request.session?.adminId) {
+          return withAck(ack, { ok: false, error: 'Sesi admin sudah berakhir. Silakan login kembali.' });
+        }
         room.hostSocketId = socket.id;
         socket.join(room.code);
         socket.data = { roomCode: room.code, role: 'host' };
@@ -324,10 +468,11 @@ function createQuizServer(options = {}) {
 
     socket.on('host:start', (payload = {}, ack) => {
       const room = getRoom(payload.code);
+      if (database.enabled && !socket.request.session?.adminId) return withAck(ack, { ok: false, error: 'Login admin diperlukan.' });
       if (!room || socket.data.role !== 'host' || room.hostSocketId !== socket.id) return withAck(ack, { ok: false, error: 'Hanya host room yang dapat memulai.' });
       if (room.status !== 'lobby') return withAck(ack, { ok: false, error: 'Kuis sudah berjalan.' });
       if (room.participants.size < 1) return withAck(ack, { ok: false, error: 'Tunggu minimal satu peserta bergabung.' });
-      room.questions = prepareQuestions();
+      room.questions = prepareQuestions(room.questionDefinition);
       withAck(ack, { ok: true });
       startQuestion(room, 0);
     });
@@ -356,9 +501,12 @@ function createQuizServer(options = {}) {
       const isCorrect = answerIndex === question.correctIndex;
       let award = 0;
       if (isCorrect) {
+        const responseTimeMs = Math.max(0, Date.now() - room.questionStartedAt);
         const remaining = Math.max(0, room.questionEndsAt - Date.now());
-        const speedBonus = Math.round((500 * (remaining / questionDurationMs)) / 10) * 10;
-        award = 500 + speedBonus;
+        const maximumPoints = question.basePoints || 1000;
+        const minimumPoints = Math.round(maximumPoints * 0.5);
+        const speedBonus = Math.round(((maximumPoints - minimumPoints) * (remaining / room.currentQuestionDurationMs)) / 10) * 10;
+        award = minimumPoints + speedBonus;
         participant.score += award;
         participant.correctCount += 1;
         participant.streak += 1;
@@ -368,16 +516,21 @@ function createQuizServer(options = {}) {
       }
       participant.lastAward = award;
       touch(room);
+      if (database.enabled && room.sessionId) {
+        const responseTimeMs = Math.max(0, Date.now() - room.questionStartedAt);
+        database.recordAnswer(room.sessionId, participant, question, room.currentIndex, answerIndex, isCorrect, responseTimeMs, award)
+          .catch((error) => console.error('Gagal menyimpan jawaban:', error));
+      }
       withAck(ack, { ok: true, isCorrect, award, score: participant.score, streak: participant.streak });
-      io.to(room.hostSocketId).emit('room:progress', {
+      io.to(room.hostSocketId).volatile.emit('room:progress', {
         answeredCount: [...room.participants.values()].filter((item) => item.answered).length,
-        participantCount: room.participants.size,
-        participants: participantList(room)
+        participantCount: room.participants.size
       });
     });
 
     socket.on('host:reset', (payload = {}, ack) => {
       const room = getRoom(payload.code);
+      if (database.enabled && !socket.request.session?.adminId) return withAck(ack, { ok: false, error: 'Login admin diperlukan.' });
       if (!room || socket.data.role !== 'host' || room.hostSocketId !== socket.id) return withAck(ack, { ok: false, error: 'Hanya host room yang dapat mengulang.' });
       clearRoomTimer(room);
       room.status = 'lobby';
@@ -411,7 +564,7 @@ function createQuizServer(options = {}) {
       question: publicQuestion(room.questions[room.currentIndex]),
       startedAt: room.questionStartedAt,
       endsAt: room.questionEndsAt,
-      durationMs: questionDurationMs,
+      durationMs: room.currentQuestionDurationMs,
       answerIndex: participant?.answered ? participant.answerIndex : null,
       answerResult: participant?.answered ? {
         isCorrect: participant.answerIndex === room.questions[room.currentIndex].correctIndex,
@@ -424,17 +577,31 @@ function createQuizServer(options = {}) {
   }
 
   function sessionResumePayload(room, role, participant) {
+    let standings = leaderboard(room);
+    if (role === 'player' && room.status !== 'finished') {
+      const top = standings.slice(0, 10);
+      const self = standings.find((entry) => entry.id === participant?.id);
+      standings = self && !top.some((entry) => entry.id === self.id) ? [...top, self] : top;
+    }
     const payload = {
       ok: true,
       role,
       player: participant ? publicPlayer(participant) : undefined,
       snapshot: roomSnapshot(room),
-      leaderboard: leaderboard(room)
+      leaderboard: standings
     };
     if (room.status === 'question' || room.status === 'reveal') {
       payload.currentQuestion = currentQuestionPayload(room, participant);
     }
-    if (room.status === 'reveal') payload.reveal = room.lastReveal;
+    if (room.status === 'reveal') {
+      const result = participant ? {
+        id: participant.id,
+        isCorrect: participant.answered && participant.answerIndex === room.questions[room.currentIndex].correctIndex,
+        award: participant.lastAward,
+        score: participant.score
+      } : undefined;
+      payload.reveal = { ...room.lastReveal, leaderboard: standings, playerResult: result };
+    }
     if (room.status === 'finished') payload.result = finishedPayload(room);
     return payload;
   }
@@ -459,11 +626,14 @@ function createQuizServer(options = {}) {
     httpServer,
     io,
     rooms,
+    database,
+    ready,
     close: () => new Promise((resolve) => {
       for (const room of rooms.values()) clearRoomTimer(room);
-      io.close(() => {
-        if (httpServer.listening) httpServer.close(resolve);
-        else resolve();
+      io.close(async () => {
+        if (httpServer.listening) await new Promise((closeResolve) => httpServer.close(closeResolve));
+        await database.close();
+        resolve();
       });
     })
   };
@@ -472,7 +642,12 @@ function createQuizServer(options = {}) {
 if (require.main === module) {
   const port = Number(process.env.PORT) || 3000;
   const quiz = createQuizServer();
-  quiz.httpServer.listen(port, '0.0.0.0', () => console.log(`Misi Simpang berjalan di http://0.0.0.0:${port}`));
+  quiz.ready.then(() => {
+    quiz.httpServer.listen(port, '0.0.0.0', () => console.log(`Misi Simpang berjalan di http://0.0.0.0:${port}`));
+  }).catch((error) => {
+    console.error('Database tidak dapat diinisialisasi:', error);
+    process.exit(1);
+  });
   const shutdown = async (signal) => {
     console.log(`${signal} diterima, menutup server dengan aman.`);
     await quiz.close();

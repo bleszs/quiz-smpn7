@@ -42,14 +42,14 @@
       <div class="home-actions">
         <div id="roleChooser" class="role-chooser">
           <p class="intro">Kuis kelas realtime</p>
-          <h2>Pilih cara masuk</h2>
-          <p class="lead">Gunakan satu perangkat sebagai host. Peserta bergabung dari ponsel dengan kode room yang tampil.</p>
+          <h2>Masuk ke permainan</h2>
+          <p class="lead">Masukkan kode dari host, kemudian isi nama dan kelasmu. Kamu juga bisa masuk langsung dengan memindai QR room.</p>
           <div class="choice-list">
             <button id="showJoinButton" class="choice-button choice-primary" type="button">
               <span class="choice-icon" aria-hidden="true">→</span>
               <span><strong>Gabung sebagai peserta</strong><small>Masukkan kode room, nama, dan kelas</small></span>
             </button>
-            <button id="showHostButton" class="choice-button" type="button">
+            <button id="showHostButton" class="choice-button hidden" type="button" tabindex="-1" aria-hidden="true">
               <span class="choice-icon" aria-hidden="true">＋</span>
               <span><strong>Buat room baru</strong><small>Untuk guru atau fasilitator kuis</small></span>
             </button>
@@ -139,6 +139,7 @@
       <h1>Menunggu host memulai</h1>
       <p id="playerIdentity" class="lead"></p>
       <div class="wait-room"><span>Room</span><strong id="playerRoomCode"></strong></div>
+      <p class="waiting-count"><strong id="playerLobbyCount">0 peserta</strong> sudah bergabung.</p>
       <p>Jangan tutup halaman ini. Soal pertama akan muncul otomatis.</p>
     </section>
 
