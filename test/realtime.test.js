@@ -90,3 +90,31 @@ test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir
   assert.equal(resumedAfterFinish.result.leaderboard.length, 2);
   assert.equal(resumedAfterFinish.result.totalQuestions, 10);
 });
+
+test('pengiriman ulang jawaban setelah koneksi buruk tidak menggandakan skor', async (t) => {
+  const quiz = createQuizServer({ questionDurationMs: 1000, revealDurationMs: 100 });
+  await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${quiz.httpServer.address().port}`;
+  const host = createClient(url, { transports: ['websocket'], forceNew: true });
+  const player = createClient(url, { transports: ['websocket'], forceNew: true });
+  t.after(async () => {
+    host.disconnect();
+    player.disconnect();
+    await quiz.close();
+  });
+
+  await Promise.all([once(host, 'connect'), once(player, 'connect')]);
+  const created = await emitAck(host, 'host:create', { hostName: 'Host Uji' });
+  await emitAck(player, 'player:join', { code: created.code, name: 'Peserta Uji', className: 'VIII-C' });
+  const questionPromise = once(player, 'room:question');
+  await emitAck(host, 'host:start', { code: created.code });
+  const question = await questionPromise;
+  const first = await emitAck(player, 'player:answer', { code: created.code, questionIndex: question.index, answerIndex: 0 });
+  const duplicate = await emitAck(player, 'player:answer', { code: created.code, questionIndex: question.index, answerIndex: 0 });
+
+  assert.equal(first.ok, true);
+  assert.equal(duplicate.ok, true);
+  assert.equal(duplicate.duplicate, true);
+  assert.equal(duplicate.score, first.score);
+  assert.equal(duplicate.award, first.award);
+});

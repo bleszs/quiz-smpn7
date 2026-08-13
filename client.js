@@ -1,4 +1,14 @@
-const socket = io({ reconnection: true, reconnectionAttempts: Infinity, timeout: 8000 });
+const socket = io({
+  reconnection: true,
+  reconnectionAttempts: Infinity,
+  reconnectionDelay: 500,
+  reconnectionDelayMax: 5000,
+  randomizationFactor: 0.5,
+  timeout: 15000,
+  tryAllTransports: true,
+  transports: ['polling', 'websocket'],
+  closeOnBeforeunload: true
+});
 
 const state = {
   role: null,
@@ -10,7 +20,11 @@ const state = {
   answerResult: null,
   timerFrame: null,
   leaderboard: [],
-  resuming: false
+  resuming: false,
+  answerSending: false,
+  pendingAnswer: null,
+  hadDisconnect: false,
+  connectionAttempts: 0
 };
 
 const $ = (id) => document.getElementById(id);
@@ -25,6 +39,17 @@ function showScreen(id) {
 function setConnection(status, label) {
   $('connectionStatus').dataset.state = status;
   $('connectionStatus').lastChild.textContent = ` ${label}`;
+}
+
+function showNetworkBanner(title, message, canRetry = true) {
+  $('networkTitle').textContent = title;
+  $('networkMessage').textContent = message;
+  $('retryConnectionButton').classList.toggle('hidden', !canRetry);
+  $('networkBanner').classList.remove('hidden');
+}
+
+function hideNetworkBanner() {
+  $('networkBanner').classList.add('hidden');
 }
 
 function setRoom(code) {
@@ -51,16 +76,22 @@ function initials(name) {
 }
 
 function saveSession(session) {
-  sessionStorage.setItem('misi-simpang-session', JSON.stringify(session));
+  const value = JSON.stringify(session);
+  sessionStorage.setItem('misi-simpang-session', value);
+  localStorage.setItem('misi-simpang-session', value);
 }
 
 function loadSession() {
-  try { return JSON.parse(sessionStorage.getItem('misi-simpang-session') || 'null'); }
+  try {
+    const value = sessionStorage.getItem('misi-simpang-session') || localStorage.getItem('misi-simpang-session');
+    return JSON.parse(value || 'null');
+  }
   catch (_) { return null; }
 }
 
 function clearSession() {
   sessionStorage.removeItem('misi-simpang-session');
+  localStorage.removeItem('misi-simpang-session');
 }
 
 function normalizeCode(value) {
@@ -129,9 +160,11 @@ function renderParticipants(participants) {
 }
 
 function renderQuestion(payload) {
+  const pending = state.pendingAnswer?.questionIndex === payload.index ? state.pendingAnswer : null;
   state.currentQuestion = payload;
-  state.selectedIndex = Number.isInteger(payload.answerIndex) ? payload.answerIndex : null;
+  state.selectedIndex = Number.isInteger(payload.answerIndex) ? payload.answerIndex : pending?.answerIndex ?? null;
   state.answerResult = payload.answerResult || null;
+  if (payload.answerResult) state.pendingAnswer = null;
   setRoom(state.roomCode);
   $('questionPosition').textContent = `Soal ${payload.index + 1}/${payload.total}`;
   $('quizRoomLabel').textContent = `Room ${state.roomCode}`;
@@ -170,6 +203,7 @@ function renderQuestion(payload) {
   }
   showScreen('quizScreen');
   startTimer(payload.endsAt, payload.durationMs);
+  if (pending && !payload.answerResult && Date.now() < payload.endsAt) sendPendingAnswer();
 }
 
 function startTimer(endsAt, durationMs) {
@@ -204,18 +238,38 @@ function showAnswerPending() {
 function submitAnswer(answerIndex) {
   if (!state.currentQuestion || state.selectedIndex !== null) return;
   state.selectedIndex = answerIndex;
+  state.pendingAnswer = { questionIndex: state.currentQuestion.index, answerIndex };
   document.querySelectorAll('.answer-button').forEach((button) => {
     button.disabled = true;
     button.dataset.selected = String(Number(button.dataset.answerIndex) === answerIndex);
   });
   showAnswerPending();
-  socket.emit('player:answer', { code: state.roomCode, questionIndex: state.currentQuestion.index, answerIndex }, (response) => {
-    if (!response?.ok) {
-      $('answerStatus').className = 'answer-status';
-      $('answerStatus').dataset.tone = 'wrong';
-      $('answerStatus').innerHTML = `<strong>Jawaban tidak diterima.</strong>${response?.error || 'Coba periksa koneksi.'}`;
+  sendPendingAnswer();
+}
+
+function sendPendingAnswer() {
+  const pending = state.pendingAnswer;
+  if (!pending || state.answerSending || !socket.connected || !state.currentQuestion) return;
+  if (pending.questionIndex !== state.currentQuestion.index || Date.now() > state.currentQuestion.endsAt + 150) return;
+  state.answerSending = true;
+  socket.timeout(5000).emit('player:answer', {
+    code: state.roomCode,
+    questionIndex: pending.questionIndex,
+    answerIndex: pending.answerIndex
+  }, (error, response) => {
+    state.answerSending = false;
+    if (error) {
+      if (Date.now() < state.currentQuestion.endsAt) window.setTimeout(sendPendingAnswer, 650);
       return;
     }
+    if (!response?.ok) {
+      state.pendingAnswer = null;
+      $('answerStatus').className = 'answer-status';
+      $('answerStatus').dataset.tone = 'wrong';
+      $('answerStatus').innerHTML = `<strong>Jawaban tidak diterima.</strong>${response?.error || 'Waktu menjawab sudah habis.'}`;
+      return;
+    }
+    state.pendingAnswer = null;
     state.answerResult = response;
     $('liveScore').textContent = response.score.toLocaleString('id-ID');
   });
@@ -241,14 +295,17 @@ function revealAnswer(payload) {
   if (state.role === 'host') {
     status.dataset.tone = 'correct';
     status.innerHTML = `<strong>Jawaban: ${escapeHtml(payload.correctAnswer)}</strong>${escapeHtml(payload.explanation)}`;
-  } else if (state.answerResult?.isCorrect) {
+  } else if (state.answerResult?.isCorrect || (!state.answerResult && state.selectedIndex === payload.correctIndex)) {
     status.dataset.tone = 'correct';
-    status.innerHTML = `<strong>Benar! +${state.answerResult.award.toLocaleString('id-ID')} poin</strong>${escapeHtml(payload.explanation)}`;
+    const award = state.answerResult ? ` +${state.answerResult.award.toLocaleString('id-ID')} poin` : '';
+    status.innerHTML = `<strong>Benar!${award}</strong>${escapeHtml(payload.explanation)}`;
   } else {
     status.dataset.tone = 'wrong';
     const lead = state.selectedIndex === null ? `Waktu habis. Jawabannya ${payload.correctAnswer}.` : `Belum tepat. Jawabannya ${payload.correctAnswer}.`;
     status.innerHTML = `<strong>${escapeHtml(lead)}</strong>${escapeHtml(payload.explanation)}`;
   }
+  state.pendingAnswer = null;
+  state.answerSending = false;
   state.leaderboard = payload.leaderboard;
 }
 
@@ -329,12 +386,21 @@ async function copyText(text, successMessage) {
   }
 }
 
-function resumeSession() {
+function resumeSession(attempt = 0) {
   const session = loadSession();
-  if (!session || state.resuming) return;
+  if (!session || state.resuming || !socket.connected) return;
   state.resuming = true;
-  socket.emit('session:resume', session, (response) => {
+  socket.timeout(8000).emit('session:resume', session, (error, response) => {
     state.resuming = false;
+    if (error) {
+      if (socket.connected && attempt < 3) {
+        window.setTimeout(() => resumeSession(attempt + 1), 500 * (2 ** attempt));
+      } else {
+        setConnection('offline', 'Pemulihan tertunda');
+        showNetworkBanner('Belum tersambung', 'Tekan coba sekarang. Posisi kuismu masih tersimpan.', true);
+      }
+      return;
+    }
     if (!response?.ok) {
       clearSession();
       setRoom('');
@@ -365,18 +431,43 @@ function resumeSession() {
       default:
         showScreen('homeScreen');
     }
+    setConnection('online', 'Terhubung');
+    hideNetworkBanner();
+    if (state.hadDisconnect) toast('Koneksi kembali. Posisi kuis berhasil dipulihkan.');
+    state.hadDisconnect = false;
   });
 }
 
 socket.on('connect', () => {
-  setConnection('online', 'Terhubung');
-  resumeSession();
+  state.connectionAttempts = 0;
+  if (loadSession()) {
+    setConnection('connecting', 'Memulihkan sesi');
+    showNetworkBanner('Koneksi kembali', 'Sedang mengembalikan posisi kuismu…', false);
+    resumeSession();
+  } else {
+    setConnection('online', 'Terhubung');
+    hideNetworkBanner();
+  }
 });
 socket.on('disconnect', () => {
   state.resuming = false;
+  state.answerSending = false;
+  state.hadDisconnect = true;
   setConnection('offline', 'Terputus — menyambungkan ulang');
+  showNetworkBanner('Koneksi terputus', 'Posisimu aman. Kami sedang menyambungkan ulang otomatis.', true);
 });
-socket.on('connect_error', () => setConnection('offline', 'Server tidak tersedia'));
+socket.on('connect_error', () => {
+  state.connectionAttempts += 1;
+  setConnection('offline', 'Server tidak tersedia');
+  const message = navigator.onLine
+    ? 'Server belum merespons. Kami tetap mencoba secara otomatis.'
+    : 'Periksa Wi-Fi atau data seluler, lalu coba kembali.';
+  showNetworkBanner('Belum bisa terhubung', message, state.connectionAttempts > 1);
+});
+
+socket.io.on('reconnect_attempt', (attempt) => {
+  setConnection('connecting', `Mencoba lagi ${attempt}`);
+});
 
 socket.on('room:lobby', (snapshot) => {
   if (!state.role || snapshot.code !== state.roomCode || snapshot.status !== 'lobby') return;
@@ -487,10 +578,39 @@ function leaveRoom() {
 }
 
 $('leaveRoomButton').addEventListener('click', leaveRoom);
+$('retryConnectionButton').addEventListener('click', () => {
+  if (!navigator.onLine) {
+    toast('Perangkat masih offline. Aktifkan Wi-Fi atau data seluler.');
+    return;
+  }
+  setConnection('connecting', 'Menghubungkan ulang');
+  showNetworkBanner('Menghubungkan ulang', 'Mohon tunggu, posisi kuismu sedang dipulihkan…', false);
+  if (socket.connected) resumeSession();
+  else socket.connect();
+});
 $('homeButton').addEventListener('click', () => {
   if (!state.role || window.confirm('Keluar dari room dan kembali ke halaman awal?')) leaveRoom();
 });
 $('retryButton').addEventListener('click', () => window.location.reload());
+
+window.addEventListener('offline', () => {
+  state.hadDisconnect = true;
+  setConnection('offline', 'Perangkat offline');
+  showNetworkBanner('Internet terputus', 'Aktifkan Wi-Fi atau data seluler. Posisi kuismu tetap tersimpan.', true);
+});
+
+window.addEventListener('online', () => {
+  setConnection('connecting', 'Internet kembali');
+  showNetworkBanner('Internet kembali', 'Sedang menyambungkan ke room…', false);
+  if (socket.connected) resumeSession();
+  else socket.connect();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !loadSession()) return;
+  if (socket.connected) resumeSession();
+  else socket.connect();
+});
 
 const roomFromUrl = normalizeCode(new URLSearchParams(window.location.search).get('room') || '');
 if (roomFromUrl && !loadSession()) {

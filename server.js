@@ -82,11 +82,20 @@ function createQuizServer(options = {}) {
   const revealDurationMs = options.revealDurationMs || Number(process.env.REVEAL_DURATION_MS) || 3_500;
   const app = express();
   const httpServer = http.createServer(app);
-  const io = new Server(httpServer, { cors: { origin: true, credentials: true } });
+  const io = new Server(httpServer, {
+    cors: { origin: true, credentials: true },
+    pingInterval: 10_000,
+    pingTimeout: 20_000,
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 5 * 60 * 1000,
+      skipMiddlewares: true
+    }
+  });
   const rooms = new Map();
 
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => response.json({ ok: true, rooms: rooms.size }));
+  app.get('/favicon.ico', (_request, response) => response.sendFile(path.join(__dirname, 'assets', 'favicon.ico')));
   app.get('/', (_request, response) => response.sendFile(path.join(__dirname, 'index.html')));
   app.get('/styles.css', (_request, response) => response.sendFile(path.join(__dirname, 'styles.css')));
   app.get('/client.js', (_request, response) => response.sendFile(path.join(__dirname, 'client.js')));
@@ -297,7 +306,17 @@ function createQuizServer(options = {}) {
       const participant = room?.participants.get(socket.data.participantId);
       if (!room || !participant || socket.data.role !== 'player') return withAck(ack, { ok: false, error: 'Sesi peserta tidak valid.' });
       if (room.status !== 'question' || payload.questionIndex !== room.currentIndex || Date.now() > room.questionEndsAt + 150) return withAck(ack, { ok: false, error: 'Waktu menjawab sudah habis.' });
-      if (participant.answered) return withAck(ack, { ok: false, error: 'Jawaban sudah dikirim.' });
+      if (participant.answered) {
+        const question = room.questions[room.currentIndex];
+        return withAck(ack, {
+          ok: true,
+          duplicate: true,
+          isCorrect: participant.answerIndex === question.correctIndex,
+          award: participant.lastAward,
+          score: participant.score,
+          streak: participant.streak
+        });
+      }
       const answerIndex = Number(payload.answerIndex);
       if (!Number.isInteger(answerIndex) || answerIndex < 0 || answerIndex > 3) return withAck(ack, { ok: false, error: 'Pilihan jawaban tidak valid.' });
       participant.answered = true;
@@ -422,8 +441,15 @@ function createQuizServer(options = {}) {
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 3000;
-  const { httpServer } = createQuizServer();
-  httpServer.listen(port, () => console.log(`Misi Simpang berjalan di http://localhost:${port}`));
+  const quiz = createQuizServer();
+  quiz.httpServer.listen(port, '0.0.0.0', () => console.log(`Misi Simpang berjalan di http://0.0.0.0:${port}`));
+  const shutdown = async (signal) => {
+    console.log(`${signal} diterima, menutup server dengan aman.`);
+    await quiz.close();
+    process.exit(0);
+  };
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+  process.once('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = { createQuizServer, QUESTION_BANK };

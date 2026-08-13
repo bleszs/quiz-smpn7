@@ -79,6 +79,32 @@ img { display: block; max-width: 100%; }
 .connection-status[data-state="online"] span { background: oklch(78% 0.16 155); }
 .connection-status[data-state="offline"] span { background: oklch(70% 0.18 35); }
 .room-chip { background: var(--gold); color: var(--ink); letter-spacing: .08em; }
+.network-banner {
+  position: sticky;
+  z-index: calc(var(--z-sticky) - 1);
+  top: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 10px clamp(14px, 4vw, 46px);
+  background: var(--gold);
+  color: var(--ink-deep);
+}
+.network-banner > div { display: flex; min-width: 0; align-items: baseline; gap: 8px; }
+.network-banner strong { flex: 0 0 auto; }
+.network-banner span { font-size: .82rem; }
+.network-retry {
+  flex: 0 0 auto;
+  padding: 6px 11px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink);
+  font-size: .78rem;
+  font-weight: 900;
+}
+.network-retry:hover { background: var(--ink); color: var(--surface); }
 
 main { padding: clamp(16px, 4vw, 42px); }
 .screen { width: min(1120px, 100%); margin-inline: auto; }
@@ -338,6 +364,8 @@ button:focus-visible, input:focus-visible { outline: 4px solid var(--focus); out
 @media (max-width: 620px) {
   main { padding: 12px; }
   .brand img { height: 34px; }
+  .network-banner { top: 62px; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .network-banner > div { display: grid; gap: 2px; }
   .connection-status { width: 12px; height: 12px; padding: 0; overflow: hidden; background: transparent; color: transparent; }
   .connection-status span { flex: 0 0 auto; }
   .room-board { align-items: flex-start; flex-direction: column; }
