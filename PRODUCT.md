@@ -10,7 +10,7 @@ Fasilitator atau guru yang memandu sesi sosialisasi MedanSimpang, serta siswa SM
 
 ## Product Purpose
 
-Misi Simpang mengubah materi pengenalan kawasan Silalas menjadi kuis kelas realtime. Keberhasilan berarti seluruh peserta dapat bergabung dengan mudah, menjawab sepuluh soal berbatas waktu yang sama secara adil, dan langsung melihat peringkat bersama setelah permainan selesai.
+Misi Simpang mengubah materi pengenalan kawasan Silalas menjadi kuis kelas realtime. Keberhasilan berarti seluruh peserta dapat bergabung dengan mudah melalui kode atau QR room, menjawab lima belas soal berbatas waktu yang sama secara adil, melihat peringkat sementara antarronde, dan tetap melihat peringkat akhir setelah permainan selesai.
 
 ## Brand Personality
 

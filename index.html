@@ -33,7 +33,7 @@
       <div class="home-visual">
         <img src="assets/kampung-silalas.jpg" alt="Suasana Kampung Silalas di tepian Sungai Deli" />
         <div class="visual-overlay">
-          <p>10 misi · 10 detik per soal</p>
+          <p>15 misi · 10 detik per soal</p>
           <h1>Siapa paling jeli membaca kota?</h1>
           <span>Masuk bersama teman sekelas, jawab cepat, dan raih posisi teratas.</span>
         </div>
@@ -97,10 +97,13 @@
           <p class="board-label">Kode room</p>
           <button id="copyRoomCode" class="room-code" type="button" title="Salin kode room"><span id="hostRoomCode"></span><small>Klik untuk menyalin</small></button>
         </div>
-        <div class="join-address">
-          <span>Peserta buka alamat ini</span>
-          <strong id="joinUrl"></strong>
-          <button id="copyJoinLink" class="text-button" type="button">Salin tautan</button>
+        <div class="room-entry-options">
+          <img id="roomQrCode" class="room-qr hidden" src="/assets/medan-simpang-logo.png" alt="QR code untuk bergabung ke room" />
+          <div class="join-address">
+            <span>Scan QR atau buka alamat ini</span>
+            <strong id="joinUrl"></strong>
+            <button id="copyJoinLink" class="text-button" type="button">Salin tautan</button>
+          </div>
         </div>
       </div>
       <div class="lobby-layout">
@@ -118,11 +121,11 @@
         </div>
         <aside class="host-controls">
           <h3>Siap mulai?</h3>
-          <p>Semua peserta akan mendapat 10 soal yang sama. Setiap soal berlangsung 10 detik.</p>
+          <p>Semua peserta mendapat 15 soal yang sama. Setelah setiap soal, peringkat sementara tampil selama 5 detik.</p>
           <ul class="rule-list">
-            <li><span aria-hidden="true">10</span> soal acak</li>
+            <li><span aria-hidden="true">15</span> soal acak</li>
             <li><span aria-hidden="true">10s</span> per soal</li>
-            <li><span aria-hidden="true">⚡</span> bonus kecepatan</li>
+            <li><span aria-hidden="true">5s</span> peringkat sementara</li>
           </ul>
           <button id="startQuizButton" class="primary full-width" type="button" disabled>Mulai kuis</button>
           <small id="startHint">Minimal 1 peserta untuk memulai.</small>
@@ -141,7 +144,7 @@
 
     <section id="quizScreen" class="screen quiz-screen hidden" aria-live="polite">
       <div class="quiz-topline">
-        <div><span id="questionPosition">Soal 1/10</span><strong id="quizRoomLabel"></strong></div>
+        <div><span id="questionPosition">Soal 1/15</span><strong id="quizRoomLabel"></strong></div>
         <div id="playerScoreWrap" class="score-wrap"><span>Skor</span><strong id="liveScore">0</strong></div>
         <div class="timer" aria-label="Waktu tersisa"><strong id="timerNumber">10</strong><span>detik</span></div>
       </div>
@@ -162,6 +165,25 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <section id="roundLeaderboardScreen" class="screen round-leaderboard-screen hidden" aria-live="polite">
+      <div class="round-heading">
+        <div>
+          <p id="roundResultLabel" class="intro">Hasil soal 1</p>
+          <h1>Peringkat sementara</h1>
+          <p id="roundAnswerSummary" class="lead"></p>
+        </div>
+        <div class="next-countdown" aria-label="Waktu menuju soal berikutnya">
+          <strong id="nextQuestionTimer">5</strong>
+          <span>detik lagi</span>
+        </div>
+      </div>
+      <div id="roundSelfResult" class="round-self-result hidden"></div>
+      <div class="round-board-wrap">
+        <ol id="roundLeaderboardList" class="round-leaderboard-list"></ol>
+      </div>
+      <p id="roundNextLabel" class="round-next-label">Soal berikutnya akan muncul otomatis.</p>
     </section>
 
     <section id="resultScreen" class="screen result-screen hidden">

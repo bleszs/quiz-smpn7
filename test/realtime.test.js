@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const { io: createClient } = require('socket.io-client');
-const { createQuizServer } = require('../server');
+const { createQuizServer, QUESTION_BANK } = require('../server');
 
 function once(socket, event) {
   return new Promise((resolve) => socket.once(event, resolve));
@@ -41,10 +41,12 @@ test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir
   assert.equal(secondJoined.snapshot.participantCount, 2);
 
   let questionCount = 0;
+  let revealCount = 0;
   player.on('room:question', (payload) => {
     questionCount += 1;
     player.emit('player:answer', { code: created.code, questionIndex: payload.index, answerIndex: 0 }, () => {});
   });
+  player.on('room:reveal', () => { revealCount += 1; });
 
   const hostFinished = once(host, 'room:finished');
   const playerFinished = once(player, 'room:finished');
@@ -69,10 +71,11 @@ test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir
   const secondPlayerFinished = once(resumedPlayer, 'room:finished');
   const [hostResult, playerResult, secondPlayerResult] = await Promise.all([hostFinished, playerFinished, secondPlayerFinished]);
 
-  assert.equal(questionCount, 10);
+  assert.equal(questionCount, 15);
+  assert.equal(revealCount, 15);
   assert.equal(hostResult.leaderboard.length, 2);
   assert.deepEqual(new Set(playerResult.leaderboard.map((entry) => entry.name)), new Set(['Siswa Satu', 'Siswa Dua']));
-  assert.equal(playerResult.totalQuestions, 10);
+  assert.equal(playerResult.totalQuestions, 15);
   assert.ok(playerResult.leaderboard[0].score >= 0);
   assert.equal(secondPlayerResult.leaderboard.length, 2);
   assert.equal(unexpectedLobbyEvents, 0);
@@ -88,7 +91,7 @@ test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir
   });
   assert.equal(resumedAfterFinish.snapshot.status, 'finished');
   assert.equal(resumedAfterFinish.result.leaderboard.length, 2);
-  assert.equal(resumedAfterFinish.result.totalQuestions, 10);
+  assert.equal(resumedAfterFinish.result.totalQuestions, 15);
 });
 
 test('pengiriman ulang jawaban setelah koneksi buruk tidak menggandakan skor', async (t) => {
@@ -117,4 +120,67 @@ test('pengiriman ulang jawaban setelah koneksi buruk tidak menggandakan skor', a
   assert.equal(duplicate.duplicate, true);
   assert.equal(duplicate.score, first.score);
   assert.equal(duplicate.award, first.award);
+});
+
+test('skor mengikuti kecepatan dan soal tetap berjalan penuh sebelum leaderboard 5 detik', async (t) => {
+  const questionDurationMs = 600;
+  const revealDurationMs = 500;
+  const quiz = createQuizServer({ questionDurationMs, revealDurationMs });
+  await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${quiz.httpServer.address().port}`;
+  const host = createClient(url, { transports: ['websocket'], forceNew: true });
+  const fastPlayer = createClient(url, { transports: ['websocket'], forceNew: true });
+  const slowerPlayer = createClient(url, { transports: ['websocket'], forceNew: true });
+  t.after(async () => {
+    host.disconnect();
+    fastPlayer.disconnect();
+    slowerPlayer.disconnect();
+    await quiz.close();
+  });
+
+  await Promise.all([once(host, 'connect'), once(fastPlayer, 'connect'), once(slowerPlayer, 'connect')]);
+  const created = await emitAck(host, 'host:create', { hostName: 'Host Waktu' });
+  const fastJoined = await emitAck(fastPlayer, 'player:join', { code: created.code, name: 'Peserta Cepat', className: 'VIII-A' });
+  const slowJoined = await emitAck(slowerPlayer, 'player:join', { code: created.code, name: 'Peserta Santai', className: 'VIII-B' });
+  const fastQuestionPromise = once(fastPlayer, 'room:question');
+  const slowQuestionPromise = once(slowerPlayer, 'room:question');
+  const revealPromise = once(host, 'room:reveal');
+  await emitAck(host, 'host:start', { code: created.code });
+  const [fastQuestion, slowQuestion] = await Promise.all([fastQuestionPromise, slowQuestionPromise]);
+  const bankQuestion = QUESTION_BANK.find((question) => question.id === fastQuestion.question.id);
+  const correctIndex = fastQuestion.question.options.indexOf(bankQuestion.correct);
+  const fastResult = await emitAck(fastPlayer, 'player:answer', { code: created.code, questionIndex: fastQuestion.index, answerIndex: correctIndex });
+  await new Promise((resolve) => setTimeout(resolve, 280));
+  const slowResult = await emitAck(slowerPlayer, 'player:answer', { code: created.code, questionIndex: slowQuestion.index, answerIndex: correctIndex });
+  const reveal = await revealPromise;
+
+  assert.equal(fastResult.isCorrect, true);
+  assert.equal(slowResult.isCorrect, true);
+  assert.ok(fastResult.award > slowResult.award);
+  assert.ok(fastResult.award <= 1000 && slowResult.award >= 500);
+  assert.equal(fastResult.award % 10, 0);
+  assert.ok(Date.now() - fastQuestion.startedAt >= questionDurationMs);
+  assert.ok(reveal.nextAt - Date.now() <= revealDurationMs);
+  assert.ok(reveal.nextAt - Date.now() > revealDurationMs - 150);
+  assert.equal(reveal.playerResults.find((result) => result.id === fastJoined.participantId).award, fastResult.award);
+  assert.equal(reveal.playerResults.find((result) => result.id === slowJoined.participantId).award, slowResult.award);
+});
+
+test('QR room tersedia dan berformat SVG', async (t) => {
+  const quiz = createQuizServer();
+  await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${quiz.httpServer.address().port}`;
+  const host = createClient(url, { transports: ['websocket'], forceNew: true });
+  t.after(async () => {
+    host.disconnect();
+    await quiz.close();
+  });
+
+  await once(host, 'connect');
+  const created = await emitAck(host, 'host:create', { hostName: 'Host QR' });
+  const response = await fetch(`${url}/api/rooms/${created.code}/qr`);
+  const svg = await response.text();
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /image\/svg\+xml/);
+  assert.match(svg, /<svg/);
 });

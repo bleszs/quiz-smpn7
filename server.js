@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const path = require('node:path');
 const express = require('express');
+const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 
 const QUESTION_BANK = [
@@ -14,7 +15,12 @@ const QUESTION_BANK = [
   { id: 7, category: 'Kategori Lokasi', question: 'Manakah tempat kategori iEat pada Trails 1?', options: ['Masjid Al Muflihin', 'Dapur Sedap Wangi', 'Rumah Qohwah', 'Florist'], correct: 'Dapur Sedap Wangi', explanation: 'Dapur Sedap Wangi tercantum sebagai lokasi kategori iEat.', image: 'assets/jajanan-lokal.jpg', alt: 'Makanan lokal yang dapat ditemukan saat menjelajah Silalas' },
   { id: 8, category: 'Kategori Lokasi', question: 'Manakah tempat kategori iDrink pada Trails 1?', options: ['Rumah Qohwah', 'Jl. Kemiri', 'Jembatan Kereta Api', 'Masjid Haji Maraset'], correct: 'Rumah Qohwah', explanation: 'Rumah Qohwah tercantum sebagai lokasi kategori iDrink.', image: 'assets/rumah-qohwah.jpg', alt: 'Rumah Qohwah di kawasan Silalas' },
   { id: 9, category: 'Bandingkan Rute', question: 'Rute mana yang memiliki jarak paling panjang di Silalas?', options: ['Trails 1 Tepian Sungai Deli', 'Trails 2 Lanskap Kampung Melayu', 'Trails 4 Masjid Tua Silalas', 'Trails 5 Kampung & Pemakaman Hijau'], correct: 'Trails 1 Tepian Sungai Deli', explanation: 'Dengan jarak 1,6 km, Trails 1 adalah yang paling panjang.', image: 'assets/deli-riverview.jpg', alt: 'Kawasan tepian sungai pada Trails 1' },
-  { id: 10, category: 'Bandingkan Rute', question: 'Rute mana yang memiliki jarak paling pendek di Silalas?', options: ['Trails 1 Tepian Sungai Deli', 'Trails 3 Rumah Tradisional Melayu', 'Trails 4 Masjid Tua Silalas', 'Trails 5 Kampung & Pemakaman Hijau'], correct: 'Trails 4 Masjid Tua Silalas', explanation: 'Trails 4 memiliki jarak 0,702 km, paling pendek dari lima rute.', image: 'assets/masjid-silalas.jpg', alt: 'Masjid bersejarah di kawasan Silalas' }
+  { id: 10, category: 'Bandingkan Rute', question: 'Rute mana yang memiliki jarak paling pendek di Silalas?', options: ['Trails 1 Tepian Sungai Deli', 'Trails 3 Rumah Tradisional Melayu', 'Trails 4 Masjid Tua Silalas', 'Trails 5 Kampung & Pemakaman Hijau'], correct: 'Trails 4 Masjid Tua Silalas', explanation: 'Trails 4 memiliki jarak 0,702 km, paling pendek dari lima rute.', image: 'assets/masjid-silalas.jpg', alt: 'Masjid bersejarah di kawasan Silalas' },
+  { id: 11, category: 'Kenali Rute', question: 'Rute mana yang mengajak peserta menyusuri lanskap Kampung Melayu?', options: ['Trails 1', 'Trails 2', 'Trails 3', 'Trails 5'], correct: 'Trails 2', explanation: 'Trails 2 bertema Lanskap Kampung Melayu.', image: 'assets/kampung-silalas.jpg', alt: 'Lanskap permukiman Kampung Melayu di kawasan Silalas' },
+  { id: 12, category: 'Kenali Rute', question: 'Rute mana yang berfokus pada rumah tradisional Melayu?', options: ['Trails 1', 'Trails 2', 'Trails 3', 'Trails 4'], correct: 'Trails 3', explanation: 'Trails 3 bertema Rumah Tradisional Melayu.', image: 'assets/kampung-silalas.jpg', alt: 'Lingkungan rumah tradisional Melayu di kawasan Silalas' },
+  { id: 13, category: 'Kenali Rute', question: 'Rute mana yang bertema Masjid Tua Silalas?', options: ['Trails 2', 'Trails 3', 'Trails 4', 'Trails 5'], correct: 'Trails 4', explanation: 'Trails 4 mengajak peserta mengenal Masjid Tua Silalas.', image: 'assets/masjid-silalas.jpg', alt: 'Masjid tua di kawasan Silalas' },
+  { id: 14, category: 'Kenali Rute', question: 'Rute mana yang memadukan suasana kampung dan pemakaman hijau?', options: ['Trails 1', 'Trails 3', 'Trails 4', 'Trails 5'], correct: 'Trails 5', explanation: 'Trails 5 bertema Kampung dan Pemakaman Hijau.', image: 'assets/kampung-silalas.jpg', alt: 'Lingkungan hijau di kawasan Kampung Silalas' },
+  { id: 15, category: 'Kategori Lokasi', question: 'Apa arti kategori iSurprise dalam perjalanan?', options: ['Tempat makan utama', 'Tempat minum', 'Kejutan menarik yang sering terlewat', 'Tempat berbelanja'], correct: 'Kejutan menarik yang sering terlewat', explanation: 'iSurprise menandai temuan menarik yang mudah terlewat saat menjelajah.', image: 'assets/jembatan-rel.jpg', alt: 'Jembatan kereta api sebagai salah satu kejutan perjalanan' }
 ];
 
 function shuffle(items) {
@@ -79,8 +85,9 @@ function participantList(room) {
 
 function createQuizServer(options = {}) {
   const questionDurationMs = options.questionDurationMs || Number(process.env.QUESTION_DURATION_MS) || 10_000;
-  const revealDurationMs = options.revealDurationMs || Number(process.env.REVEAL_DURATION_MS) || 3_500;
+  const revealDurationMs = options.revealDurationMs || Number(process.env.REVEAL_DURATION_MS) || 5_000;
   const app = express();
+  app.set('trust proxy', 1);
   const httpServer = http.createServer(app);
   const io = new Server(httpServer, {
     cors: { origin: true, credentials: true },
@@ -99,6 +106,24 @@ function createQuizServer(options = {}) {
   app.get('/', (_request, response) => response.sendFile(path.join(__dirname, 'index.html')));
   app.get('/styles.css', (_request, response) => response.sendFile(path.join(__dirname, 'styles.css')));
   app.get('/client.js', (_request, response) => response.sendFile(path.join(__dirname, 'client.js')));
+  app.get('/api/rooms/:code/qr', async (request, response) => {
+    const code = cleanText(request.params.code, 6).toUpperCase();
+    if (!rooms.has(code)) return response.status(404).json({ error: 'Room tidak ditemukan.' });
+    const joinUrl = `${request.protocol}://${request.get('host')}/?room=${encodeURIComponent(code)}`;
+    try {
+      const svg = await QRCode.toString(joinUrl, {
+        type: 'svg',
+        errorCorrectionLevel: 'M',
+        margin: 2,
+        width: 280,
+        color: { dark: '#173f49', light: '#ffffff' }
+      });
+      response.set('Cache-Control', 'no-store');
+      response.type('image/svg+xml').send(svg);
+    } catch (_error) {
+      response.status(500).json({ error: 'QR code tidak dapat dibuat.' });
+    }
+  });
   app.use('/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '7d', immutable: true }));
 
   function clearRoomTimer(room) {
@@ -166,6 +191,12 @@ function createQuizServer(options = {}) {
       correctAnswer: question.correct,
       explanation: question.explanation,
       leaderboard: leaderboard(room),
+      playerResults: [...room.participants.values()].map((participant) => ({
+        id: participant.id,
+        isCorrect: participant.answered && participant.answerIndex === question.correctIndex,
+        award: participant.lastAward,
+        score: participant.score
+      })),
       nextAt,
       isLast: room.currentIndex === room.questions.length - 1
     };
@@ -326,9 +357,8 @@ function createQuizServer(options = {}) {
       let award = 0;
       if (isCorrect) {
         const remaining = Math.max(0, room.questionEndsAt - Date.now());
-        const speedBonus = Math.round(500 * (remaining / questionDurationMs));
-        const streakBonus = Math.min(participant.streak, 4) * 50;
-        award = 500 + speedBonus + streakBonus;
+        const speedBonus = Math.round((500 * (remaining / questionDurationMs)) / 10) * 10;
+        award = 500 + speedBonus;
         participant.score += award;
         participant.correctCount += 1;
         participant.streak += 1;

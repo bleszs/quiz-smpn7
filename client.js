@@ -20,6 +20,7 @@ const state = {
   answerResult: null,
   timerFrame: null,
   leaderboard: [],
+  totalQuestions: 15,
   resuming: false,
   answerSending: false,
   pendingAnswer: null,
@@ -28,7 +29,7 @@ const state = {
 };
 
 const $ = (id) => document.getElementById(id);
-const screens = ['homeScreen', 'hostLobbyScreen', 'playerLobbyScreen', 'quizScreen', 'resultScreen', 'errorScreen'];
+const screens = ['homeScreen', 'hostLobbyScreen', 'playerLobbyScreen', 'quizScreen', 'roundLeaderboardScreen', 'resultScreen', 'errorScreen'];
 const letters = ['A', 'B', 'C', 'D'];
 
 function showScreen(id) {
@@ -125,6 +126,8 @@ function renderHostLobby(snapshot) {
   joinUrl.search = '';
   joinUrl.searchParams.set('room', snapshot.code);
   $('joinUrl').textContent = joinUrl.toString();
+  $('roomQrCode').src = `/api/rooms/${encodeURIComponent(snapshot.code)}/qr`;
+  $('roomQrCode').classList.remove('hidden');
   renderParticipants(snapshot.participants || []);
   const count = snapshot.participantCount || 0;
   $('participantCount').textContent = `${count} peserta`;
@@ -164,6 +167,7 @@ function renderQuestion(payload) {
   state.currentQuestion = payload;
   state.selectedIndex = Number.isInteger(payload.answerIndex) ? payload.answerIndex : pending?.answerIndex ?? null;
   state.answerResult = payload.answerResult || null;
+  state.totalQuestions = payload.total || state.totalQuestions;
   if (payload.answerResult) state.pendingAnswer = null;
   setRoom(state.roomCode);
   $('questionPosition').textContent = `Soal ${payload.index + 1}/${payload.total}`;
@@ -277,41 +281,57 @@ function sendPendingAnswer() {
 
 function revealAnswer(payload) {
   cancelAnimationFrame(state.timerFrame);
-  $('timerNumber').textContent = '0';
-  $('timerBar').style.transform = 'scaleX(0)';
-  document.querySelectorAll('.answer-button').forEach((button) => {
-    const index = Number(button.dataset.answerIndex);
-    button.disabled = true;
-    button.dataset.correct = String(index === payload.correctIndex);
-    button.dataset.wrong = String(index === state.selectedIndex && index !== payload.correctIndex);
-    button.dataset.dim = String(index !== payload.correctIndex && index !== state.selectedIndex);
-    const icon = button.querySelector('.answer-result-icon');
-    if (index === payload.correctIndex) icon.textContent = '✓';
-    if (index === state.selectedIndex && index !== payload.correctIndex) icon.textContent = '×';
-  });
-
-  const status = $('answerStatus');
-  status.classList.remove('hidden');
-  if (state.role === 'host') {
-    status.dataset.tone = 'correct';
-    status.innerHTML = `<strong>Jawaban: ${escapeHtml(payload.correctAnswer)}</strong>${escapeHtml(payload.explanation)}`;
-  } else if (state.answerResult?.isCorrect || (!state.answerResult && state.selectedIndex === payload.correctIndex)) {
-    status.dataset.tone = 'correct';
-    const award = state.answerResult ? ` +${state.answerResult.award.toLocaleString('id-ID')} poin` : '';
-    status.innerHTML = `<strong>Benar!${award}</strong>${escapeHtml(payload.explanation)}`;
-  } else {
-    status.dataset.tone = 'wrong';
-    const lead = state.selectedIndex === null ? `Waktu habis. Jawabannya ${payload.correctAnswer}.` : `Belum tepat. Jawabannya ${payload.correctAnswer}.`;
-    status.innerHTML = `<strong>${escapeHtml(lead)}</strong>${escapeHtml(payload.explanation)}`;
-  }
   state.pendingAnswer = null;
   state.answerSending = false;
-  state.leaderboard = payload.leaderboard;
+  state.leaderboard = payload.leaderboard || [];
+  const playerResult = payload.playerResults?.find((entry) => entry.id === state.participantId);
+  if (playerResult) {
+    state.answerResult = { ...state.answerResult, ...playerResult };
+    $('liveScore').textContent = playerResult.score.toLocaleString('id-ID');
+  }
+  renderRoundLeaderboard(payload, playerResult);
+}
+
+function renderRoundLeaderboard(payload, playerResult) {
+  const questionNumber = payload.questionIndex + 1;
+  $('roundResultLabel').textContent = `Hasil soal ${questionNumber} dari ${state.totalQuestions}`;
+  $('roundAnswerSummary').textContent = `Jawaban: ${payload.correctAnswer}. ${payload.explanation}`;
+  $('roundNextLabel').textContent = payload.isLast
+    ? 'Hasil akhir akan muncul otomatis.'
+    : `Soal ${questionNumber + 1} akan muncul otomatis.`;
+
+  const selfResult = $('roundSelfResult');
+  if (state.role === 'player') {
+    const isCorrect = Boolean(playerResult?.isCorrect);
+    const award = playerResult?.award || 0;
+    selfResult.className = 'round-self-result';
+    selfResult.dataset.tone = isCorrect ? 'correct' : 'wrong';
+    selfResult.textContent = isCorrect
+      ? `Jawabanmu benar · +${award.toLocaleString('id-ID')} poin`
+      : state.selectedIndex === null ? 'Waktu habis · 0 poin' : 'Jawabanmu belum tepat · 0 poin';
+  } else {
+    selfResult.className = 'round-self-result hidden';
+  }
+
+  renderLeaderboardRows($('roundLeaderboardList'), state.leaderboard, false);
+  showScreen('roundLeaderboardScreen');
+  startNextQuestionTimer(payload.nextAt);
+}
+
+function startNextQuestionTimer(nextAt) {
+  cancelAnimationFrame(state.timerFrame);
+  function update() {
+    const remaining = Math.max(0, nextAt - Date.now());
+    $('nextQuestionTimer').textContent = String(Math.max(0, Math.ceil(remaining / 1000)));
+    if (remaining > 0) state.timerFrame = requestAnimationFrame(update);
+  }
+  update();
 }
 
 function renderResults(payload) {
   cancelAnimationFrame(state.timerFrame);
   state.leaderboard = payload.leaderboard || [];
+  state.totalQuestions = payload.totalQuestions || state.totalQuestions;
   setRoom(payload.code);
   $('resultRoomCode').textContent = payload.code;
   const self = state.leaderboard.find((entry) => entry.id === state.participantId);
@@ -319,7 +339,7 @@ function renderResults(payload) {
     ? `${state.leaderboard.length} peserta telah menyelesaikan ${payload.totalQuestions} soal.`
     : self ? `Kamu meraih peringkat ${self.rank} dari ${state.leaderboard.length} peserta dengan ${self.score.toLocaleString('id-ID')} poin.` : 'Seluruh jawaban sudah dihitung.';
   renderPodium(state.leaderboard.slice(0, 3));
-  renderLeaderboard(state.leaderboard);
+  renderLeaderboardRows($('leaderboardList'), state.leaderboard, true);
   $('playAgainButton').classList.toggle('hidden', state.role !== 'host');
   showScreen('resultScreen');
 }
@@ -345,8 +365,8 @@ function renderPodium(topPlayers) {
   }));
 }
 
-function renderLeaderboard(players) {
-  $('leaderboardList').replaceChildren(...players.map((player) => {
+function renderLeaderboardRows(target, players, showCorrect) {
+  target.replaceChildren(...players.map((player) => {
     const item = document.createElement('li');
     item.className = 'leaderboard-row';
     item.dataset.self = String(player.id === state.participantId);
@@ -362,11 +382,13 @@ function renderLeaderboard(players) {
     person.append(name, className);
     const correct = document.createElement('span');
     correct.className = 'leaderboard-stat';
-    correct.textContent = `${player.correctCount}/10`;
+    correct.textContent = `${player.correctCount}/${state.totalQuestions}`;
     const score = document.createElement('span');
     score.className = 'leaderboard-score';
     score.textContent = player.score.toLocaleString('id-ID');
-    item.append(position, person, correct, score);
+    item.append(position, person);
+    if (showCorrect) item.append(correct);
+    item.append(score);
     return item;
   }));
 }
@@ -562,7 +584,7 @@ $('answerList').addEventListener('click', (event) => {
 $('copyRoomCode').addEventListener('click', () => copyText(state.roomCode, 'Kode room berhasil disalin.'));
 $('copyJoinLink').addEventListener('click', () => copyText($('joinUrl').textContent, 'Tautan room berhasil disalin.'));
 $('shareResultButton').addEventListener('click', () => {
-  const lines = [`MISI SIMPANG — LEADERBOARD ROOM ${state.roomCode}`, ...state.leaderboard.map((player) => `${player.rank}. ${player.name} (${player.className}) — ${player.score} poin, ${player.correctCount}/10 benar`)];
+  const lines = [`MISI SIMPANG — LEADERBOARD ROOM ${state.roomCode}`, ...state.leaderboard.map((player) => `${player.rank}. ${player.name} (${player.className}) — ${player.score} poin, ${player.correctCount}/${state.totalQuestions} benar`)];
   copyText(lines.join('\n'), 'Leaderboard berhasil disalin.');
 });
 
