@@ -9,7 +9,8 @@ const state = {
   selectedIndex: null,
   answerResult: null,
   timerFrame: null,
-  leaderboard: []
+  leaderboard: [],
+  resuming: false
 };
 
 const $ = (id) => document.getElementById(id);
@@ -330,8 +331,10 @@ async function copyText(text, successMessage) {
 
 function resumeSession() {
   const session = loadSession();
-  if (!session) return;
+  if (!session || state.resuming) return;
+  state.resuming = true;
   socket.emit('session:resume', session, (response) => {
+    state.resuming = false;
     if (!response?.ok) {
       clearSession();
       setRoom('');
@@ -343,11 +346,24 @@ function resumeSession() {
     state.roomCode = session.code;
     state.participantId = session.participantId || '';
     state.player = response.player || state.player;
-    if (response.snapshot.status === 'lobby') {
-      if (state.role === 'host') renderHostLobby(response.snapshot);
-      else renderPlayerLobby(response.snapshot);
-    } else if (response.snapshot.status === 'reveal') {
-      toast('Tersambung kembali. Menunggu soal berikutnya…');
+    if (response.player) $('liveScore').textContent = response.player.score.toLocaleString('id-ID');
+    switch (response.snapshot.status) {
+      case 'lobby':
+        if (state.role === 'host') renderHostLobby(response.snapshot);
+        else renderPlayerLobby(response.snapshot);
+        break;
+      case 'question':
+        renderQuestion(response.currentQuestion);
+        break;
+      case 'reveal':
+        renderQuestion(response.currentQuestion);
+        revealAnswer(response.reveal);
+        break;
+      case 'finished':
+        renderResults(response.result);
+        break;
+      default:
+        showScreen('homeScreen');
     }
   });
 }
@@ -356,13 +372,22 @@ socket.on('connect', () => {
   setConnection('online', 'Terhubung');
   resumeSession();
 });
-socket.on('disconnect', () => setConnection('offline', 'Terputus — menyambungkan ulang'));
+socket.on('disconnect', () => {
+  state.resuming = false;
+  setConnection('offline', 'Terputus — menyambungkan ulang');
+});
 socket.on('connect_error', () => setConnection('offline', 'Server tidak tersedia'));
 
 socket.on('room:lobby', (snapshot) => {
-  if (!state.role || snapshot.code !== state.roomCode) return;
+  if (!state.role || snapshot.code !== state.roomCode || snapshot.status !== 'lobby') return;
   if (state.role === 'host') renderHostLobby(snapshot);
   else renderPlayerLobby(snapshot);
+});
+
+socket.on('room:roster', (payload) => {
+  if (state.role !== 'host') return;
+  renderParticipants(payload.participants || []);
+  $('participantCount').textContent = `${payload.participantCount || 0} peserta`;
 });
 
 socket.on('room:question', (payload) => {

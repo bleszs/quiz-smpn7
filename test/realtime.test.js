@@ -12,17 +12,19 @@ function emitAck(socket, event, payload) {
 }
 
 test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir', async (t) => {
-  const quiz = createQuizServer({ questionDurationMs: 75, revealDurationMs: 30 });
+  const quiz = createQuizServer({ questionDurationMs: 250, revealDurationMs: 35 });
   await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
   const address = quiz.httpServer.address();
   const url = `http://127.0.0.1:${address.port}`;
   const host = createClient(url, { transports: ['websocket'], forceNew: true });
   const player = createClient(url, { transports: ['websocket'], forceNew: true });
   const secondPlayer = createClient(url, { transports: ['websocket'], forceNew: true });
+  let resumedPlayer;
   t.after(async () => {
     host.disconnect();
     player.disconnect();
     secondPlayer.disconnect();
+    resumedPlayer?.disconnect();
     await quiz.close();
   });
 
@@ -46,9 +48,25 @@ test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir
 
   const hostFinished = once(host, 'room:finished');
   const playerFinished = once(player, 'room:finished');
-  const secondPlayerFinished = once(secondPlayer, 'room:finished');
   const started = await emitAck(host, 'host:start', { code: created.code });
   assert.equal(started.ok, true);
+
+  let unexpectedLobbyEvents = 0;
+  host.on('room:lobby', () => { unexpectedLobbyEvents += 1; });
+  secondPlayer.disconnect();
+  resumedPlayer = createClient(url, { transports: ['websocket'], forceNew: true });
+  await once(resumedPlayer, 'connect');
+  const resumed = await emitAck(resumedPlayer, 'session:resume', {
+    role: 'player',
+    code: created.code,
+    participantId: secondJoined.participantId,
+    token: secondJoined.playerToken
+  });
+  assert.equal(resumed.ok, true);
+  assert.notEqual(resumed.snapshot.status, 'lobby');
+  assert.ok(resumed.currentQuestion);
+
+  const secondPlayerFinished = once(resumedPlayer, 'room:finished');
   const [hostResult, playerResult, secondPlayerResult] = await Promise.all([hostFinished, playerFinished, secondPlayerFinished]);
 
   assert.equal(questionCount, 10);
@@ -57,4 +75,18 @@ test('host dan beberapa peserta menyelesaikan satu room sampai leaderboard akhir
   assert.equal(playerResult.totalQuestions, 10);
   assert.ok(playerResult.leaderboard[0].score >= 0);
   assert.equal(secondPlayerResult.leaderboard.length, 2);
+  assert.equal(unexpectedLobbyEvents, 0);
+
+  resumedPlayer.disconnect();
+  resumedPlayer = createClient(url, { transports: ['websocket'], forceNew: true });
+  await once(resumedPlayer, 'connect');
+  const resumedAfterFinish = await emitAck(resumedPlayer, 'session:resume', {
+    role: 'player',
+    code: created.code,
+    participantId: secondJoined.participantId,
+    token: secondJoined.playerToken
+  });
+  assert.equal(resumedAfterFinish.snapshot.status, 'finished');
+  assert.equal(resumedAfterFinish.result.leaderboard.length, 2);
+  assert.equal(resumedAfterFinish.result.totalQuestions, 10);
 });

@@ -116,15 +116,30 @@ function createQuizServer(options = {}) {
     io.to(room.code).emit('room:lobby', roomSnapshot(room));
   }
 
+  function emitRoster(room) {
+    if (room.status === 'lobby') {
+      emitLobby(room);
+      return;
+    }
+    io.to(room.hostSocketId).emit('room:roster', {
+      participantCount: room.participants.size,
+      participants: participantList(room)
+    });
+  }
+
+  function finishedPayload(room) {
+    return {
+      code: room.code,
+      leaderboard: leaderboard(room),
+      totalQuestions: room.questions.length
+    };
+  }
+
   function finishRoom(room) {
     clearRoomTimer(room);
     room.status = 'finished';
     touch(room);
-    io.to(room.code).emit('room:finished', {
-      code: room.code,
-      leaderboard: leaderboard(room),
-      totalQuestions: room.questions.length
-    });
+    io.to(room.code).emit('room:finished', finishedPayload(room));
   }
 
   function revealQuestion(room) {
@@ -171,7 +186,8 @@ function createQuizServer(options = {}) {
       question: publicQuestion(room.questions[index]),
       startedAt: room.questionStartedAt,
       endsAt: room.questionEndsAt,
-      durationMs: questionDurationMs
+      durationMs: questionDurationMs,
+      participantCount: room.participants.size
     });
     touch(room);
     room.timer = setTimeout(() => revealQuestion(room), questionDurationMs + 80);
@@ -253,13 +269,7 @@ function createQuizServer(options = {}) {
         room.hostSocketId = socket.id;
         socket.join(room.code);
         socket.data = { roomCode: room.code, role: 'host' };
-        withAck(ack, { ok: true, role: 'host', snapshot: roomSnapshot(room), leaderboard: leaderboard(room) });
-        if (room.status === 'question') socket.emit('room:question', currentQuestionPayload(room));
-        if (room.status === 'reveal' && room.lastReveal) {
-          socket.emit('room:question', currentQuestionPayload(room));
-          socket.emit('room:reveal', room.lastReveal);
-        }
-        if (room.status === 'finished') socket.emit('room:finished', { code: room.code, leaderboard: leaderboard(room), totalQuestions: room.questions.length });
+        withAck(ack, sessionResumePayload(room, 'host'));
         return;
       }
       const participant = room.participants.get(payload.participantId);
@@ -268,14 +278,8 @@ function createQuizServer(options = {}) {
       participant.connected = true;
       socket.join(room.code);
       socket.data = { roomCode: room.code, role: 'player', participantId: participant.id };
-      withAck(ack, { ok: true, role: 'player', player: publicPlayer(participant), snapshot: roomSnapshot(room), leaderboard: leaderboard(room) });
-      emitLobby(room);
-      if (room.status === 'question') socket.emit('room:question', currentQuestionPayload(room, participant));
-      if (room.status === 'reveal' && room.lastReveal) {
-        socket.emit('room:question', currentQuestionPayload(room, participant));
-        socket.emit('room:reveal', room.lastReveal);
-      }
-      if (room.status === 'finished') socket.emit('room:finished', { code: room.code, leaderboard: leaderboard(room), totalQuestions: room.questions.length });
+      withAck(ack, sessionResumePayload(room, 'player', participant));
+      emitRoster(room);
     });
 
     socket.on('host:start', (payload = {}, ack) => {
@@ -345,7 +349,7 @@ function createQuizServer(options = {}) {
       if (socket.data.role === 'player') {
         const participant = room.participants.get(socket.data.participantId);
         if (participant) participant.connected = false;
-        emitLobby(room);
+        emitRoster(room);
       }
       touch(room);
     });
@@ -368,6 +372,22 @@ function createQuizServer(options = {}) {
       } : null,
       participantCount: room.participants.size
     };
+  }
+
+  function sessionResumePayload(room, role, participant) {
+    const payload = {
+      ok: true,
+      role,
+      player: participant ? publicPlayer(participant) : undefined,
+      snapshot: roomSnapshot(room),
+      leaderboard: leaderboard(room)
+    };
+    if (room.status === 'question' || room.status === 'reveal') {
+      payload.currentQuestion = currentQuestionPayload(room, participant);
+    }
+    if (room.status === 'reveal') payload.reveal = room.lastReveal;
+    if (room.status === 'finished') payload.result = finishedPayload(room);
+    return payload;
   }
 
   function publicPlayer(participant) {
