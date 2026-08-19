@@ -46,24 +46,12 @@ img { display: block; max-width: 100%; }
   display: flex;
   min-height: 62px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   padding: 10px clamp(14px, 4vw, 46px);
   background: var(--ink);
   color: var(--surface);
 }
-.brand {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 10px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font-weight: 900;
-}
-.brand img { width: auto; height: 42px; object-fit: contain; }
 .connection-wrap { display: flex; align-items: center; gap: 8px; }
 .connection-status, .room-chip {
   display: inline-flex;
@@ -439,7 +427,6 @@ select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 4px sol
 
 @media (max-width: 620px) {
   main { padding: 12px; }
-  .brand img { height: 34px; }
   .network-banner { top: 62px; align-items: flex-start; justify-content: space-between; gap: 12px; }
   .network-banner > div { display: grid; gap: 2px; }
   .connection-status { width: 12px; height: 12px; padding: 0; overflow: hidden; background: transparent; color: transparent; }

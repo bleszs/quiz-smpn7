@@ -611,9 +611,6 @@ $('retryConnectionButton').addEventListener('click', () => {
   if (socket.connected) resumeSession();
   else socket.connect();
 });
-$('homeButton').addEventListener('click', () => {
-  if (!state.role || window.confirm('Keluar dari room dan kembali ke halaman awal?')) leaveRoom();
-});
 $('retryButton').addEventListener('click', () => window.location.reload());
 
 window.addEventListener('offline', () => {
