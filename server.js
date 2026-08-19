@@ -98,6 +98,8 @@ function createQuizServer(options = {}) {
     (process.env.ALLOWED_ORIGINS || 'https://quiz-smpn7-production.up.railway.app,https://urbanmorphsoc.com')
       .split(',').map((origin) => origin.trim()).filter(Boolean)
   );
+  const publicJoinUrl = process.env.PUBLIC_JOIN_URL
+    || (process.env.NODE_ENV === 'production' ? 'https://urbanmorphsoc.com/medansimpang/game/' : '');
   const allowOrigin = (origin) => !origin || allowedOrigins.has(origin) || /^https?:\/\/localhost(?::\d+)?$/.test(origin);
   const httpServer = http.createServer(app);
   const io = new Server(httpServer, {
@@ -129,19 +131,21 @@ function createQuizServer(options = {}) {
     cookie: {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
       maxAge: 12 * 60 * 60 * 1000
     }
   });
 
   app.use(helmet({
+    frameguard: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         imgSrc: ["'self'", 'data:'],
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
-        connectSrc: ["'self'", 'ws:', 'wss:']
+        connectSrc: ["'self'", 'ws:', 'wss:'],
+        frameAncestors: ["'self'", ...allowedOrigins]
       }
     }
   }));
@@ -164,9 +168,10 @@ function createQuizServer(options = {}) {
   app.get('/api/rooms/:code/qr', async (request, response) => {
     const code = cleanText(request.params.code, 6).toUpperCase();
     if (!rooms.has(code)) return response.status(404).json({ error: 'Room tidak ditemukan.' });
-    const joinUrl = `${request.protocol}://${request.get('host')}/join?room=${encodeURIComponent(code)}`;
     try {
-      const svg = await QRCode.toString(joinUrl, {
+      const joinUrl = new URL(publicJoinUrl || `${request.protocol}://${request.get('host')}/join`);
+      joinUrl.searchParams.set('room', code);
+      const svg = await QRCode.toString(joinUrl.toString(), {
         type: 'svg',
         errorCorrectionLevel: 'M',
         margin: 2,
@@ -203,7 +208,8 @@ function createQuizServer(options = {}) {
       currentIndex: room.currentIndex,
       totalQuestions: room.questionDefinition?.length || QUESTION_BANK.length,
       quizId: room.quizId || null,
-      quizTitle: room.quizTitle || 'Medan Simpang'
+      quizTitle: room.quizTitle || 'Medan Simpang',
+      publicJoinUrl
     };
   }
 

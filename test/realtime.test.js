@@ -184,3 +184,17 @@ test('QR room tersedia dan berformat SVG', async (t) => {
   assert.match(response.headers.get('content-type'), /image\/svg\+xml/);
   assert.match(svg, /<svg/);
 });
+
+test('game hanya dapat ditanam oleh origin yang diizinkan', async (t) => {
+  const quiz = createQuizServer();
+  await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${quiz.httpServer.address().port}`;
+  t.after(async () => quiz.close());
+
+  const response = await fetch(url);
+  const policy = response.headers.get('content-security-policy') || '';
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('x-frame-options'), null);
+  assert.match(policy, /frame-ancestors 'self'/);
+  assert.match(policy, /https:\/\/urbanmorphsoc\.com/);
+});

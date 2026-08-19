@@ -296,7 +296,7 @@ function renderHostLobby(snapshot) {
   $('adminRoomChip').classList.remove('hidden');
   $('adminRoomCode').textContent = snapshot.code;
   $('activeQuizName').textContent = snapshot.quizTitle || 'Room quiz';
-  const joinUrl = new URL('/join', window.location.origin);
+  const joinUrl = new URL(snapshot.publicJoinUrl || '/join', window.location.origin);
   joinUrl.searchParams.set('room', snapshot.code);
   $('adminJoinUrl').textContent = joinUrl.toString();
   $('adminQr').src = `/api/rooms/${encodeURIComponent(snapshot.code)}/qr`;

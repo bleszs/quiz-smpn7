@@ -122,7 +122,7 @@ function showFormError(id, message) {
 function renderHostLobby(snapshot) {
   setRoom(snapshot.code);
   $('hostRoomCode').textContent = snapshot.code;
-  const joinUrl = new URL(window.location.href);
+  const joinUrl = new URL(snapshot.publicJoinUrl || window.location.href);
   joinUrl.search = '';
   joinUrl.searchParams.set('room', snapshot.code);
   $('joinUrl').textContent = joinUrl.toString();
