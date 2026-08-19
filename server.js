@@ -100,7 +100,10 @@ function createQuizServer(options = {}) {
   );
   const publicJoinUrl = process.env.PUBLIC_JOIN_URL
     || (process.env.NODE_ENV === 'production' ? 'https://urbanmorphsoc.com/medansimpang/game/' : '');
-  const allowOrigin = (origin) => !origin || allowedOrigins.has(origin) || /^https?:\/\/localhost(?::\d+)?$/.test(origin);
+  const localEmbedOrigins = ['http://localhost:*', 'https://localhost:*', 'http://127.0.0.1:*'];
+  const allowOrigin = (origin) => !origin
+    || allowedOrigins.has(origin)
+    || /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?$/.test(origin);
   const httpServer = http.createServer(app);
   const io = new Server(httpServer, {
     cors: {
@@ -145,7 +148,7 @@ function createQuizServer(options = {}) {
         scriptSrc: ["'self'"],
         styleSrc: ["'self'"],
         connectSrc: ["'self'", 'ws:', 'wss:'],
-        frameAncestors: ["'self'", ...allowedOrigins]
+        frameAncestors: ["'self'", ...allowedOrigins, ...localEmbedOrigins]
       }
     }
   }));

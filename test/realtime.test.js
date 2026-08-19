@@ -197,4 +197,6 @@ test('game hanya dapat ditanam oleh origin yang diizinkan', async (t) => {
   assert.equal(response.headers.get('x-frame-options'), null);
   assert.match(policy, /frame-ancestors 'self'/);
   assert.match(policy, /https:\/\/urbanmorphsoc\.com/);
+  assert.match(policy, /http:\/\/localhost:\*/);
+  assert.match(policy, /http:\/\/127\.0\.0\.1:\*/);
 });
