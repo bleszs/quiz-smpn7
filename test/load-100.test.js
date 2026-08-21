@@ -64,3 +64,61 @@ test('100 peserta menerima seluruh ronde dan masuk leaderboard akhir', { timeout
     assert.equal(counter.answers, 15);
   });
 });
+
+test('90 perangkat campuran websocket dan polling dapat menjawab seluruh soal', { timeout: 45_000 }, async (t) => {
+  const participantTotal = 90;
+  const quiz = createQuizServer({ questionDurationMs: 420, revealDurationMs: 80 });
+  await quiz.ready;
+  await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
+  const url = `http://127.0.0.1:${quiz.httpServer.address().port}`;
+  const host = createClient(url, { transports: ['websocket'], forceNew: true });
+  const players = Array.from({ length: participantTotal }, (_, index) => createClient(url, {
+    transports: index % 3 === 0 ? ['polling'] : ['websocket'],
+    forceNew: true,
+    reconnection: true
+  }));
+
+  t.after(async () => {
+    host.disconnect();
+    players.forEach((player) => player.disconnect());
+    await quiz.close();
+  });
+
+  await Promise.all([once(host, 'connect'), ...players.map((player) => once(player, 'connect'))]);
+  const created = await emitAck(host, 'host:create', { hostName: 'Host Uji 90 Perangkat' });
+  assert.equal(created.ok, true);
+
+  const joined = await Promise.all(players.map((player, index) => emitAck(player, 'player:join', {
+    code: created.code,
+    name: `Mobile ${String(index + 1).padStart(2, '0')}`,
+    className: `Kelas-${(index % 6) + 1}`
+  })));
+  assert.equal(joined.filter((result) => result.ok).length, participantTotal);
+
+  const answers = Array.from({ length: participantTotal }, () => 0);
+  const questions = Array.from({ length: participantTotal }, () => 0);
+  const finished = players.map((player) => once(player, 'room:finished'));
+  players.forEach((player, playerIndex) => {
+    player.on('room:question', (payload) => {
+      questions[playerIndex] += 1;
+      const source = QUESTION_BANK.find((question) => question.id === payload.question.id);
+      const answerIndex = payload.question.options.indexOf(source.correct);
+      const mobileTapDelayMs = 25 + ((playerIndex % 8) * 18);
+      setTimeout(() => {
+        player.emit('player:answer', { code: created.code, questionIndex: payload.index, answerIndex }, (result) => {
+          if (result?.ok) answers[playerIndex] += 1;
+        });
+      }, mobileTapDelayMs);
+    });
+  });
+
+  const hostFinished = once(host, 'room:finished');
+  const started = await emitAck(host, 'host:start', { code: created.code });
+  assert.equal(started.ok, true);
+  const [result] = await Promise.all([hostFinished, ...finished]);
+
+  assert.equal(result.leaderboard.length, participantTotal);
+  assert.equal(result.totalQuestions, 15);
+  questions.forEach((count) => assert.equal(count, 15));
+  answers.forEach((count) => assert.equal(count, 15));
+});

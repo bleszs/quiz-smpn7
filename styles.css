@@ -288,8 +288,12 @@ select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 4px sol
   color: var(--text);
   font-weight: 780;
   text-align: left;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: color-mix(in oklch, var(--teal) 18%, transparent);
+  user-select: none;
   transition: border-color 150ms ease, transform 150ms cubic-bezier(.16, 1, .3, 1), background-color 150ms ease;
 }
+.answer-button > * { pointer-events: none; }
 .answer-button:hover:not(:disabled) { border-color: var(--teal); transform: translateX(3px); }
 .answer-button:disabled { cursor: default; }
 .answer-letter { display: grid; width: 39px; height: 39px; place-items: center; border-radius: 9px; background: var(--canvas); color: var(--ink); font-weight: 950; }

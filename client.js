@@ -22,10 +22,11 @@ const state = {
   leaderboard: [],
   totalQuestions: 15,
   resuming: false,
-  answerSending: false,
+  answerSendingForQuestion: null,
   pendingAnswer: null,
   hadDisconnect: false,
-  connectionAttempts: 0
+  connectionAttempts: 0,
+  serverTimeOffsetMs: 0
 };
 
 const $ = (id) => document.getElementById(id);
@@ -99,6 +100,14 @@ function normalizeCode(value) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
 }
 
+function syncServerTime(serverNow) {
+  if (Number.isFinite(serverNow)) state.serverTimeOffsetMs = serverNow - Date.now();
+}
+
+function currentServerTime() {
+  return Date.now() + state.serverTimeOffsetMs;
+}
+
 function showForm(type) {
   $('roleChooser').classList.add('hidden');
   $('joinForm').classList.toggle('hidden', type !== 'join');
@@ -164,7 +173,13 @@ function renderParticipants(participants) {
 }
 
 function renderQuestion(payload) {
+  syncServerTime(payload.serverNow);
   const pending = state.pendingAnswer?.questionIndex === payload.index ? state.pendingAnswer : null;
+  const isNewQuestion = state.currentQuestion?.index !== payload.index;
+  if (isNewQuestion) {
+    state.answerSendingForQuestion = null;
+    if (!pending) state.pendingAnswer = null;
+  }
   state.currentQuestion = payload;
   state.selectedIndex = Number.isInteger(payload.answerIndex) ? payload.answerIndex : pending?.answerIndex ?? null;
   state.answerResult = payload.answerResult || null;
@@ -188,7 +203,15 @@ function renderQuestion(payload) {
     button.className = 'answer-button';
     button.dataset.answerIndex = String(index);
     button.dataset.selected = String(index === state.selectedIndex);
-    button.disabled = state.role === 'host' || state.selectedIndex !== null;
+    button.disabled = state.role !== 'player' || state.selectedIndex !== null || currentServerTime() >= payload.endsAt;
+    button.setAttribute('aria-label', `${letters[index]}. ${option}`);
+    button.addEventListener('pointerup', (event) => {
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') {
+        event.preventDefault();
+        submitAnswer(index);
+      }
+    });
+    button.addEventListener('click', () => submitAnswer(index));
     const letter = document.createElement('span');
     letter.className = 'answer-letter';
     letter.textContent = letters[index];
@@ -208,13 +231,13 @@ function renderQuestion(payload) {
   }
   showScreen('quizScreen');
   startTimer(payload.endsAt, payload.durationMs);
-  if (pending && !payload.answerResult && Date.now() < payload.endsAt) sendPendingAnswer();
+  if (pending && !payload.answerResult && currentServerTime() < payload.endsAt) sendPendingAnswer();
 }
 
 function startTimer(endsAt, durationMs) {
   cancelAnimationFrame(state.timerFrame);
   function update() {
-    const remaining = Math.max(0, endsAt - Date.now());
+    const remaining = Math.max(0, endsAt - currentServerTime());
     const seconds = Math.max(0, Math.ceil(remaining / 1000));
     const ratio = Math.max(0, Math.min(1, remaining / durationMs));
     $('timerNumber').textContent = String(seconds);
@@ -241,7 +264,8 @@ function showAnswerPending() {
 }
 
 function submitAnswer(answerIndex) {
-  if (!state.currentQuestion || state.selectedIndex !== null) return;
+  if (state.role !== 'player' || !state.currentQuestion || state.selectedIndex !== null) return;
+  if (currentServerTime() >= state.currentQuestion.endsAt) return;
   state.selectedIndex = answerIndex;
   state.pendingAnswer = { questionIndex: state.currentQuestion.index, answerIndex };
   document.querySelectorAll('.answer-button').forEach((button) => {
@@ -254,17 +278,19 @@ function submitAnswer(answerIndex) {
 
 function sendPendingAnswer() {
   const pending = state.pendingAnswer;
-  if (!pending || state.answerSending || !socket.connected || !state.currentQuestion) return;
-  if (pending.questionIndex !== state.currentQuestion.index || Date.now() > state.currentQuestion.endsAt + 150) return;
-  state.answerSending = true;
+  if (!pending || !socket.connected || !state.currentQuestion) return;
+  if (state.answerSendingForQuestion === pending.questionIndex) return;
+  if (pending.questionIndex !== state.currentQuestion.index || currentServerTime() > state.currentQuestion.endsAt + 150) return;
+  state.answerSendingForQuestion = pending.questionIndex;
   socket.timeout(5000).emit('player:answer', {
     code: state.roomCode,
     questionIndex: pending.questionIndex,
     answerIndex: pending.answerIndex
   }, (error, response) => {
-    state.answerSending = false;
+    if (state.answerSendingForQuestion === pending.questionIndex) state.answerSendingForQuestion = null;
+    if (state.currentQuestion?.index !== pending.questionIndex) return;
     if (error) {
-      if (Date.now() < state.currentQuestion.endsAt) window.setTimeout(sendPendingAnswer, 650);
+      if (currentServerTime() < state.currentQuestion.endsAt) window.setTimeout(sendPendingAnswer, 650);
       return;
     }
     if (!response?.ok) {
@@ -281,9 +307,10 @@ function sendPendingAnswer() {
 }
 
 function revealAnswer(payload) {
+  syncServerTime(payload.serverNow);
   cancelAnimationFrame(state.timerFrame);
   state.pendingAnswer = null;
-  state.answerSending = false;
+  state.answerSendingForQuestion = null;
   state.leaderboard = payload.leaderboard || [];
   const playerResult = payload.playerResult || payload.playerResults?.find((entry) => entry.id === state.participantId);
   if (playerResult) {
@@ -322,7 +349,7 @@ function renderRoundLeaderboard(payload, playerResult) {
 function startNextQuestionTimer(nextAt) {
   cancelAnimationFrame(state.timerFrame);
   function update() {
-    const remaining = Math.max(0, nextAt - Date.now());
+    const remaining = Math.max(0, nextAt - currentServerTime());
     $('nextQuestionTimer').textContent = String(Math.max(0, Math.ceil(remaining / 1000)));
     if (remaining > 0) state.timerFrame = requestAnimationFrame(update);
   }
@@ -432,6 +459,7 @@ function resumeSession(attempt = 0) {
       return;
     }
     state.role = response.role;
+    state.answerSendingForQuestion = null;
     state.roomCode = session.code;
     state.participantId = session.participantId || '';
     state.player = response.player || state.player;
@@ -474,7 +502,7 @@ socket.on('connect', () => {
 });
 socket.on('disconnect', () => {
   state.resuming = false;
-  state.answerSending = false;
+  state.answerSendingForQuestion = null;
   state.hadDisconnect = true;
   setConnection('offline', 'Terputus — menyambungkan ulang');
   showNetworkBanner('Koneksi terputus', 'Posisimu aman. Kami sedang menyambungkan ulang otomatis.', true);
@@ -577,11 +605,6 @@ $('startQuizButton').addEventListener('click', () => {
   });
 });
 
-$('answerList').addEventListener('click', (event) => {
-  const button = event.target.closest('[data-answer-index]');
-  if (button && state.role === 'player') submitAnswer(Number(button.dataset.answerIndex));
-});
-
 $('copyRoomCode').addEventListener('click', () => copyText(state.roomCode, 'Kode room berhasil disalin.'));
 $('copyJoinLink').addEventListener('click', () => copyText($('joinUrl').textContent, 'Tautan room berhasil disalin.'));
 $('shareResultButton').addEventListener('click', () => {
@@ -628,6 +651,13 @@ window.addEventListener('online', () => {
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible' || !loadSession()) return;
+  if (socket.connected) resumeSession();
+  else socket.connect();
+});
+
+window.addEventListener('pageshow', (event) => {
+  if (!event.persisted || !loadSession()) return;
+  state.answerSendingForQuestion = null;
   if (socket.connected) resumeSession();
   else socket.connect();
 });

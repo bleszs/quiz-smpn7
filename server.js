@@ -283,6 +283,7 @@ function createQuizServer(options = {}) {
       explanation: question.explanation,
       leaderboard: standings,
       nextAt,
+      serverNow: Date.now(),
       isLast: room.currentIndex === room.questions.length - 1
     };
     if (room.hostSocketId) {
@@ -329,6 +330,7 @@ function createQuizServer(options = {}) {
       question: publicQuestion(room.questions[index]),
       startedAt: room.questionStartedAt,
       endsAt: room.questionEndsAt,
+      serverNow: Date.now(),
       durationMs: room.currentQuestionDurationMs,
       participantCount: room.participants.size
     });
@@ -573,6 +575,7 @@ function createQuizServer(options = {}) {
       question: publicQuestion(room.questions[room.currentIndex]),
       startedAt: room.questionStartedAt,
       endsAt: room.questionEndsAt,
+      serverNow: Date.now(),
       durationMs: room.currentQuestionDurationMs,
       answerIndex: participant?.answered ? participant.answerIndex : null,
       answerResult: participant?.answered ? {
@@ -609,7 +612,7 @@ function createQuizServer(options = {}) {
         award: participant.lastAward,
         score: participant.score
       } : undefined;
-      payload.reveal = { ...room.lastReveal, leaderboard: standings, playerResult: result };
+      payload.reveal = { ...room.lastReveal, serverNow: Date.now(), leaderboard: standings, playerResult: result };
     }
     if (room.status === 'finished') payload.result = finishedPayload(room);
     return payload;
