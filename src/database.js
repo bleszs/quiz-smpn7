@@ -35,6 +35,7 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
         description TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
         seed_key TEXT,
+        seed_version INTEGER NOT NULL DEFAULT 1,
         created_by UUID REFERENCES admins(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -107,6 +108,7 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
       CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(game_session_id, answered_at);
 
       ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS seed_key TEXT;
+      ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS seed_version INTEGER NOT NULL DEFAULT 1;
       CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_seed_key ON quizzes(seed_key) WHERE seed_key IS NOT NULL;
     `);
 
@@ -134,7 +136,7 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
 
     for (const seededQuiz of seededQuizzes) {
       const inserted = await ensureSeedQuiz(seededQuiz);
-      if (inserted) console.log(`Quiz awal ditambahkan: ${seededQuiz.title}`);
+      if (inserted) console.log(`Quiz awal ditambahkan/diperbarui: ${seededQuiz.title}`);
     }
   }
 
@@ -143,18 +145,27 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      const quizId = crypto.randomUUID();
+      const newQuizId = crypto.randomUUID();
       const inserted = await client.query(
-        `INSERT INTO quizzes (id, title, description, status, seed_key)
-         VALUES ($1, $2, $3, $4, $5)
-         ON CONFLICT (seed_key) WHERE seed_key IS NOT NULL DO NOTHING
+        `INSERT INTO quizzes (id, title, description, status, seed_key, seed_version)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (seed_key) WHERE seed_key IS NOT NULL DO UPDATE
+         SET title = EXCLUDED.title,
+             description = EXCLUDED.description,
+             status = EXCLUDED.status,
+             seed_version = EXCLUDED.seed_version,
+             deleted_at = NULL,
+             updated_at = NOW()
+         WHERE quizzes.seed_version < EXCLUDED.seed_version
          RETURNING id`,
-        [quizId, seed.title, seed.description || '', seed.status || 'draft', seed.seedKey]
+        [newQuizId, seed.title, seed.description || '', seed.status || 'draft', seed.seedKey, seed.seedVersion || 1]
       );
       if (!inserted.rowCount) {
         await client.query('ROLLBACK');
         return false;
       }
+      const quizId = inserted.rows[0].id;
+      await client.query('DELETE FROM questions WHERE quiz_id = $1', [quizId]);
       for (let index = 0; index < seed.questions.length; index += 1) {
         const question = seed.questions[index];
         await client.query(

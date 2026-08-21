@@ -1,5 +1,6 @@
 const EASY_QUIZ = {
   seedKey: 'medan-simpang-mudah-v1',
+  seedVersion: 2,
   title: 'Kenalan Mudah Medan Simpang',
   description: 'Kuis ringan untuk mengenal website, kawasan Silalas, kategori lokasi, dan cara bermain Quiz Medan Simpang.',
   status: 'published',
@@ -86,22 +87,22 @@ const EASY_QUIZ = {
       altText: 'Salah satu situs yang dapat dilihat di Silalas'
     },
     {
-      category: 'Kategori Lokasi',
-      prompt: 'Apa arti kategori iSurprise?',
-      options: ['Temuan menarik yang mudah terlewat', 'Tempat parkir', 'Loket pembayaran', 'Halte bus'],
+      category: 'Kenali Tempat',
+      prompt: 'SMP-SMA Kalam Kudus termasuk kategori lokasi apa di Medan Simpang?',
+      options: ['iSee', 'iEat', 'iDrink', 'iSurprise'],
       correctOptionIndex: 0,
-      explanation: 'iSurprise menandai kejutan atau temuan menarik yang sering tidak disadari pengunjung.',
-      imageUrl: 'assets/jembatan-rel.jpg',
-      altText: 'Jembatan rel sebagai salah satu temuan menarik'
+      explanation: 'SMP-SMA Kalam Kudus termasuk kategori iSee pada Trails 6 Koridor Adam Malik.',
+      imageUrl: 'assets/kampung-silalas.jpg',
+      altText: 'Kawasan yang dilalui dalam rute Medan Simpang'
     },
     {
-      category: 'Cara Bermain',
-      prompt: 'Apa yang dibutuhkan peserta untuk masuk ke permainan?',
-      options: ['Kode room', 'Nomor paspor', 'Kartu ATM', 'Surat izin'],
+      category: 'Kenali Tempat',
+      prompt: 'Di manakah lokasi SMP-SMA Kalam Kudus?',
+      options: ['Jl. Mayang No. 10, Sekip', 'Jl. Pala, Silalas', 'Jl. Guru Patimpus, Silalas', 'Jl. Sei Deli, Silalas'],
       correctOptionIndex: 0,
-      explanation: 'Peserta masuk menggunakan kode room yang dibagikan oleh host.',
-      imageUrl: 'assets/medan-simpang-logo.png',
-      altText: 'Logo Quiz Medan Simpang'
+      explanation: 'SMP-SMA Kalam Kudus beralamat di Jl. Mayang No. 10, Kelurahan Sekip, Kecamatan Medan Petisah.',
+      imageUrl: 'assets/kampung-silalas.jpg',
+      altText: 'Lingkungan kawasan pada rute Medan Simpang'
     },
     {
       category: 'Cara Bermain',
