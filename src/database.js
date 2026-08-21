@@ -19,7 +19,7 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
     ssl: process.env.DATABASE_SSL === 'true' ? { rejectUnauthorized: false } : undefined
   });
 
-  async function initialize(defaultQuestions) {
+  async function initialize(defaultQuestions, seededQuizzes = []) {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS admins (
         id UUID PRIMARY KEY,
@@ -34,6 +34,7 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
         title TEXT NOT NULL,
         description TEXT NOT NULL DEFAULT '',
         status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published', 'archived')),
+        seed_key TEXT,
         created_by UUID REFERENCES admins(id) ON DELETE SET NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -104,6 +105,9 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
       CREATE INDEX IF NOT EXISTS idx_sessions_quiz ON game_sessions(quiz_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_participants_session ON participants(game_session_id, score DESC);
       CREATE INDEX IF NOT EXISTS idx_answers_session ON answers(game_session_id, answered_at);
+
+      ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS seed_key TEXT;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_seed_key ON quizzes(seed_key) WHERE seed_key IS NOT NULL;
     `);
 
     const existing = await pool.query('SELECT id FROM quizzes WHERE deleted_at IS NULL LIMIT 1');
@@ -126,6 +130,52 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
         imageUrl: question.image,
         altText: question.alt
       })));
+    }
+
+    for (const seededQuiz of seededQuizzes) {
+      const inserted = await ensureSeedQuiz(seededQuiz);
+      if (inserted) console.log(`Quiz awal ditambahkan: ${seededQuiz.title}`);
+    }
+  }
+
+  async function ensureSeedQuiz(seed) {
+    if (!seed?.seedKey || !seed?.title || !Array.isArray(seed.questions) || !seed.questions.length) return false;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const quizId = crypto.randomUUID();
+      const inserted = await client.query(
+        `INSERT INTO quizzes (id, title, description, status, seed_key)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (seed_key) WHERE seed_key IS NOT NULL DO NOTHING
+         RETURNING id`,
+        [quizId, seed.title, seed.description || '', seed.status || 'draft', seed.seedKey]
+      );
+      if (!inserted.rowCount) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      for (let index = 0; index < seed.questions.length; index += 1) {
+        const question = seed.questions[index];
+        await client.query(
+          `INSERT INTO questions
+           (id, quiz_id, category, prompt, options, correct_option_index, explanation, time_limit_ms, base_points, position, image_url, alt_text)
+           VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12)`,
+          [
+            crypto.randomUUID(), quizId, question.category || '', question.prompt,
+            JSON.stringify(question.options), question.correctOptionIndex, question.explanation || '',
+            question.timeLimitMs || 10_000, question.basePoints || 1000, index + 1,
+            question.imageUrl || '', question.altText || ''
+          ]
+        );
+      }
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
   }
 

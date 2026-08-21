@@ -9,6 +9,7 @@ const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const { createDatabase } = require('./src/database');
 const { createAdminRouter } = require('./src/admin-routes');
+const { EASY_QUIZ } = require('./src/easy-quiz');
 
 const QUESTION_BANK = [
   { id: 1, category: 'Kawasan Silalas', question: 'Ada berapa walking trails yang ditampilkan di kawasan Silalas?', options: ['3 rute', '4 rute', '5 rute', '6 rute'], correct: '5 rute', explanation: 'Halaman Silalas menampilkan lima rute jalan kaki.', image: 'assets/kampung-silalas.jpg', alt: 'Suasana kawasan Silalas di Medan' },
@@ -155,7 +156,7 @@ function createQuizServer(options = {}) {
   app.use(express.json({ limit: '200kb' }));
   app.use(sessionMiddleware);
   io.engine.use(sessionMiddleware);
-  const ready = database.initialize(QUESTION_BANK);
+  const ready = database.initialize(QUESTION_BANK, [EASY_QUIZ]);
 
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => response.json({ ok: true, rooms: rooms.size, database: database.enabled }));
