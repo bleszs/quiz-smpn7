@@ -1,6 +1,6 @@
 const EASY_QUIZ = {
   seedKey: 'medan-simpang-mudah-v1',
-  seedVersion: 2,
+  seedVersion: 3,
   title: 'Kenalan Mudah Medan Simpang',
   description: 'Kuis ringan untuk mengenal website, kawasan Silalas, kategori lokasi, dan cara bermain Quiz Medan Simpang.',
   status: 'published',
@@ -105,40 +105,40 @@ const EASY_QUIZ = {
       altText: 'Lingkungan kawasan pada rute Medan Simpang'
     },
     {
-      category: 'Cara Bermain',
-      prompt: 'Selain mengetik kode room, peserta dapat masuk dengan memindai apa?',
-      options: ['Kode QR', 'Sidik jari', 'Kartu pelajar', 'Barcode produk'],
+      category: 'Kenali Tempat',
+      prompt: 'Tempat minum apa yang menjadi salah satu titik awal Trails 1?',
+      options: ['Rumah Qohwah', 'Dapur Sedap Wangi', 'Masjid Al Muflihin', 'SMP-SMA Kalam Kudus'],
       correctOptionIndex: 0,
-      explanation: 'Kode QR room dapat dipindai agar peserta langsung membuka halaman masuk.',
-      imageUrl: 'assets/medan-simpang-logo.png',
-      altText: 'Identitas visual Quiz Medan Simpang'
+      explanation: 'Rumah Qohwah merupakan tempat minum dan salah satu titik awal Trails 1 Deli Riverside.',
+      imageUrl: 'assets/rumah-qohwah.jpg',
+      altText: 'Rumah Qohwah di kawasan Silalas'
     },
     {
-      category: 'Cara Bermain',
-      prompt: 'Berapa jumlah soal dalam satu permainan?',
-      options: ['15 soal', '5 soal', '25 soal', '50 soal'],
+      category: 'Kuliner Silalas',
+      prompt: 'Tempat makan mana yang menyajikan beragam masakan rumahan?',
+      options: ['Dapur Sedap Wangi', 'Rumah Qohwah', 'Gereja Kalam Kudus', 'Jembatan Kereta Api'],
       correctOptionIndex: 0,
-      explanation: 'Satu permainan terdiri dari 15 soal.',
-      imageUrl: 'assets/kampung-silalas.jpg',
-      altText: 'Suasana kawasan yang menjadi materi kuis'
+      explanation: 'Dapur Sedap Wangi adalah rumah makan dengan beragam pilihan masakan rumahan.',
+      imageUrl: 'assets/jajanan-lokal.jpg',
+      altText: 'Kuliner lokal yang dapat ditemui di kawasan Silalas'
     },
     {
-      category: 'Cara Bermain',
-      prompt: 'Berapa waktu yang tersedia untuk menjawab satu soal?',
-      options: ['10 detik', '1 menit', '5 menit', '30 menit'],
+      category: 'Jejak Kota',
+      prompt: 'Jembatan Kereta Api tua di kawasan Silalas melintang di atas sungai apa?',
+      options: ['Sungai Deli', 'Sungai Musi', 'Sungai Kapuas', 'Sungai Asahan'],
       correctOptionIndex: 0,
-      explanation: 'Setiap soal memiliki waktu menjawab 10 detik.',
-      imageUrl: 'assets/deli-riverview.jpg',
-      altText: 'Rute Medan Simpang yang menjadi materi kuis'
+      explanation: 'Jembatan Kereta Api tua tersebut melintang di atas Sungai Deli.',
+      imageUrl: 'assets/jembatan-rel.jpg',
+      altText: 'Jembatan rel kereta api tua di atas Sungai Deli'
     },
     {
-      category: 'Hasil Permainan',
-      prompt: 'Apa yang ditampilkan setelah seluruh soal selesai?',
-      options: ['Papan peringkat akhir', 'Halaman belanja', 'Jadwal penerbangan', 'Ramalan cuaca'],
+      category: 'Kenali Rute',
+      prompt: 'Rute berapa yang mengangkat tema Masjid Tua Silalas?',
+      options: ['Trail 4', 'Trail 1', 'Trail 2', 'Trail 6'],
       correctOptionIndex: 0,
-      explanation: 'Setelah permainan selesai, seluruh peserta dapat melihat papan peringkat akhir.',
-      imageUrl: 'assets/medan-simpang-logo.png',
-      altText: 'Logo Quiz Medan Simpang'
+      explanation: 'Trail 4 mengangkat tema Masjid Tua Silalas dan kawasan pemakaman bersejarah.',
+      imageUrl: 'assets/masjid-silalas.jpg',
+      altText: 'Masjid bersejarah di kawasan Silalas'
     }
   ].map((question, index) => ({
     ...question,
