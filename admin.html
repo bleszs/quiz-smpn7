@@ -1,4 +1,4 @@
-<!doctype html>
+  <!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8" />
@@ -55,19 +55,31 @@
 
     <section id="adminDashboard" class="admin-shell hidden">
       <aside class="admin-sidebar">
-        <div><p class="intro">Admin dashboard</p><h2>Quiz Medan Simpang</h2></div>
+        <div class="admin-brand">
+          <span class="admin-brand-mark" aria-hidden="true">MS</span>
+          <div><p class="intro">Panel pengelola</p><h2>Quiz Medan Simpang</h2></div>
+        </div>
         <nav class="admin-nav" aria-label="Navigasi admin">
-          <button type="button" data-admin-view="quizzes" data-active="true">Quiz Saya</button>
-          <button type="button" data-admin-view="results">Riwayat Game</button>
+          <button type="button" data-admin-view="quizzes" data-active="true"><span class="admin-nav-icon" aria-hidden="true">▦</span><span>Quiz Saya</span></button>
+          <button type="button" data-admin-view="results"><span class="admin-nav-icon" aria-hidden="true">↺</span><span>Riwayat Game</span></button>
         </nav>
-        <a class="text-button" href="/join" target="_blank" rel="noopener">Buka halaman peserta ↗</a>
+        <div class="admin-sidebar-footer">
+          <p>Lihat tampilan yang digunakan peserta untuk masuk ke room.</p>
+          <a class="admin-participant-link" href="/join" target="_blank" rel="noopener">Buka halaman peserta <span aria-hidden="true">↗</span></a>
+        </div>
       </aside>
       <div class="admin-content">
         <section id="quizListView">
           <div class="admin-page-heading">
-            <div><p class="intro">Koleksi quiz</p><h1>Quiz Saya</h1><p class="lead compact">Pilih quiz untuk diedit atau mulai room baru.</p></div>
-            <button id="newQuizButton" class="primary" type="button">+ Buat Quiz</button>
+            <div><p class="intro">Dashboard admin</p><h1>Quiz Saya</h1><p class="lead compact">Kelola pertanyaan dan mulai permainan dari satu tempat.</p></div>
+            <button id="newQuizButton" class="primary admin-create-button" type="button"><span aria-hidden="true">+</span> Buat quiz baru</button>
           </div>
+          <div class="admin-summary" aria-label="Ringkasan quiz">
+            <article><span>Total quiz</span><strong id="adminQuizTotal">0</strong><small>tersimpan</small></article>
+            <article><span>Siap dimainkan</span><strong id="adminQuizPublished">0</strong><small>published</small></article>
+            <article><span>Total soal</span><strong id="adminQuestionTotal">0</strong><small>dari semua quiz</small></article>
+          </div>
+          <div class="admin-list-heading"><div><h2>Koleksi quiz</h2><p>Pilih quiz untuk diedit atau buat room permainan.</p></div><span id="adminQuizCountLabel">0 quiz</span></div>
           <div id="quizList" class="quiz-admin-list" aria-live="polite"></div>
         </section>
 

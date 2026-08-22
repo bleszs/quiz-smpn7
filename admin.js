@@ -114,6 +114,12 @@ function makeButton(label, className, action) {
 async function loadQuizzes() {
   const data = await api('/quizzes');
   adminState.quizzes = data.quizzes || [];
+  const totalQuestions = adminState.quizzes.reduce((total, quiz) => total + Number(quiz.question_count || 0), 0);
+  const publishedQuizzes = adminState.quizzes.filter((quiz) => quiz.status === 'published').length;
+  $('adminQuizTotal').textContent = String(adminState.quizzes.length);
+  $('adminQuizPublished').textContent = String(publishedQuizzes);
+  $('adminQuestionTotal').textContent = String(totalQuestions);
+  $('adminQuizCountLabel').textContent = `${adminState.quizzes.length} quiz`;
   const list = $('quizList');
   if (!adminState.quizzes.length) {
     const empty = document.createElement('div');
@@ -126,16 +132,30 @@ async function loadQuizzes() {
     const item = document.createElement('article');
     item.className = 'quiz-admin-row';
     const info = document.createElement('div');
+    info.className = 'quiz-admin-info';
+    const eyebrow = document.createElement('div');
+    eyebrow.className = 'quiz-admin-eyebrow';
+    const status = document.createElement('span');
+    status.className = 'quiz-status';
+    status.dataset.status = quiz.status;
+    status.textContent = quiz.status === 'published' ? 'Siap dimainkan' : quiz.status;
+    const questionCount = document.createElement('span');
+    questionCount.className = 'quiz-question-count';
+    questionCount.textContent = `${quiz.question_count} soal`;
+    eyebrow.append(status, questionCount);
     const title = document.createElement('h3');
     title.textContent = quiz.title;
     const meta = document.createElement('p');
-    meta.textContent = `${quiz.question_count} soal · ${quiz.status}`;
-    info.append(title, meta);
+    meta.textContent = quiz.description || 'Quiz siap diedit, dilengkapi, atau dimainkan bersama peserta.';
+    info.append(eyebrow, title, meta);
     const actions = document.createElement('div');
+    actions.className = 'quiz-admin-actions';
     const edit = makeButton('Edit', 'secondary', () => editQuiz(quiz.id));
-    const start = makeButton('Mulai', 'primary', () => createRoom(quiz));
+    const start = makeButton('Mulai game', 'primary', () => createRoom(quiz));
     start.disabled = quiz.status !== 'published' || quiz.question_count < 1;
-    const remove = makeButton('Hapus', 'text-button danger-text', () => archiveQuiz(quiz));
+    const remove = makeButton('Hapus quiz', 'quiz-delete-button', () => archiveQuiz(quiz));
+    remove.title = 'Hapus quiz';
+    remove.setAttribute('aria-label', `Hapus quiz ${quiz.title}`);
     actions.append(edit, start, remove);
     item.append(info, actions);
     return item;
@@ -429,7 +449,15 @@ async function showStoredResult(sessionId) {
 async function loadStoredResults() {
   const data = await api('/results');
   $('resultDetail').classList.add('hidden');
-  $('resultsList').replaceChildren(...(data.sessions || []).map((session) => {
+  const sessions = data.sessions || [];
+  if (!sessions.length) {
+    const empty = document.createElement('div');
+    empty.className = 'admin-empty';
+    empty.innerHTML = '<strong>Belum ada riwayat game.</strong><p>Riwayat dan leaderboard akan tampil setelah sebuah permainan selesai.</p>';
+    $('resultsList').replaceChildren(empty);
+    return;
+  }
+  $('resultsList').replaceChildren(...sessions.map((session) => {
     const row = document.createElement('div');
     row.className = 'result-admin-row';
     const info = document.createElement('div');
