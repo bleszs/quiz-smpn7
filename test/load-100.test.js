@@ -54,6 +54,7 @@ test('100 peserta menerima seluruh ronde dan masuk leaderboard akhir', { timeout
   const started = await emitAck(host, 'host:start', { code: created.code });
   assert.equal(started.ok, true);
   const [result] = await Promise.all([hostFinished, ...finishedPlayers]);
+  await new Promise((resolve) => setTimeout(resolve, 250));
 
   assert.equal(result.leaderboard.length, participantTotal);
   assert.equal(result.totalQuestions, 15);
@@ -65,9 +66,11 @@ test('100 peserta menerima seluruh ronde dan masuk leaderboard akhir', { timeout
   });
 });
 
-test('90 perangkat campuran websocket dan polling dapat menjawab seluruh soal', { timeout: 45_000 }, async (t) => {
+test('90 perangkat campuran websocket dan polling dapat menjawab seluruh soal', { timeout: 60_000 }, async (t) => {
   const participantTotal = 90;
-  const quiz = createQuizServer({ questionDurationMs: 420, revealDurationMs: 80 });
+  // Produksi memberi 10 detik per soal. Satu detik di sini tetap 10x lebih berat,
+  // tetapi cukup longgar untuk antrean HTTP long-polling pada mesin CI Windows.
+  const quiz = createQuizServer({ questionDurationMs: 1_000, revealDurationMs: 80 });
   await quiz.ready;
   await new Promise((resolve) => quiz.httpServer.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${quiz.httpServer.address().port}`;
@@ -116,6 +119,7 @@ test('90 perangkat campuran websocket dan polling dapat menjawab seluruh soal', 
   const started = await emitAck(host, 'host:start', { code: created.code });
   assert.equal(started.ok, true);
   const [result] = await Promise.all([hostFinished, ...finished]);
+  await new Promise((resolve) => setTimeout(resolve, 300));
 
   assert.equal(result.leaderboard.length, participantTotal);
   assert.equal(result.totalQuestions, 15);

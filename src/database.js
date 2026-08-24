@@ -24,6 +24,7 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
       CREATE TABLE IF NOT EXISTS admins (
         id UUID PRIMARY KEY,
         email TEXT NOT NULL UNIQUE,
+        username TEXT,
         password_hash TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -109,6 +110,11 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
 
       ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS seed_key TEXT;
       ALTER TABLE quizzes ADD COLUMN IF NOT EXISTS seed_version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE admins ADD COLUMN IF NOT EXISTS username TEXT;
+      UPDATE admins
+      SET username = LOWER(SPLIT_PART(email, '@', 1)) || '-' || LEFT(id::text, 8)
+      WHERE username IS NULL OR username = '';
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_username ON admins(LOWER(username));
       CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_seed_key ON quizzes(seed_key) WHERE seed_key IS NOT NULL;
     `);
 
@@ -277,6 +283,73 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
     return getQuiz(quizId);
   }
 
+  async function createQuestion(quizId, question) {
+    const id = crypto.randomUUID();
+    const positionResult = await pool.query(
+      'SELECT COALESCE(MAX(position), 0)::INTEGER + 1 AS position FROM questions WHERE quiz_id = $1',
+      [quizId]
+    );
+    await pool.query(
+      `INSERT INTO questions
+       (id, quiz_id, category, prompt, options, correct_option_index, explanation, time_limit_ms, base_points, position, image_url, alt_text)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8, $9, $10, $11, $12)`,
+      [
+        id, quizId, question.category || '', question.prompt, JSON.stringify(question.options),
+        question.correctOptionIndex, question.explanation || '', question.timeLimitMs,
+        question.basePoints, positionResult.rows[0].position, question.imageUrl || '', question.altText || ''
+      ]
+    );
+    await pool.query('UPDATE quizzes SET updated_at = NOW() WHERE id = $1', [quizId]);
+    const result = await pool.query('SELECT * FROM questions WHERE id = $1 AND quiz_id = $2', [id, quizId]);
+    return result.rowCount ? normalizeQuestion(result.rows[0]) : null;
+  }
+
+  async function updateQuestion(quizId, questionId, question) {
+    const result = await pool.query(
+      `UPDATE questions
+       SET category = $3, prompt = $4, options = $5::jsonb, correct_option_index = $6,
+           explanation = $7, time_limit_ms = $8, base_points = $9,
+           image_url = $10, alt_text = $11, updated_at = NOW()
+       WHERE id = $1 AND quiz_id = $2
+       RETURNING *`,
+      [
+        questionId, quizId, question.category || '', question.prompt, JSON.stringify(question.options),
+        question.correctOptionIndex, question.explanation || '', question.timeLimitMs,
+        question.basePoints, question.imageUrl || '', question.altText || ''
+      ]
+    );
+    if (!result.rowCount) return null;
+    await pool.query('UPDATE quizzes SET updated_at = NOW() WHERE id = $1', [quizId]);
+    return normalizeQuestion(result.rows[0]);
+  }
+
+  async function deleteQuestion(quizId, questionId) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const deleted = await client.query(
+        'DELETE FROM questions WHERE id = $1 AND quiz_id = $2 RETURNING id',
+        [questionId, quizId]
+      );
+      if (!deleted.rowCount) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      const remaining = await client.query('SELECT id FROM questions WHERE quiz_id = $1 ORDER BY position', [quizId]);
+      for (let index = 0; index < remaining.rows.length; index += 1) {
+        await client.query('UPDATE questions SET position = $2 WHERE id = $1', [remaining.rows[index].id, index + 1]);
+      }
+      await client.query('UPDATE quizzes SET updated_at = NOW() WHERE id = $1', [quizId]);
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async function archiveQuiz(id) {
     const result = await pool.query(
       "UPDATE quizzes SET status = 'archived', deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND deleted_at IS NULL",
@@ -290,18 +363,33 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
     return result.rows[0].count;
   }
 
-  async function createAdmin(email, passwordHash) {
+  async function createAdmin(username, passwordHash) {
     const id = crypto.randomUUID();
+    const email = `${username}-${id.slice(0, 8)}@quiz.local`;
     const result = await pool.query(
-      'INSERT INTO admins (id, email, password_hash) VALUES ($1, LOWER($2), $3) RETURNING id, email',
-      [id, email, passwordHash]
+      'INSERT INTO admins (id, email, username, password_hash) VALUES ($1, LOWER($2), LOWER($3), $4) RETURNING id, username',
+      [id, email, username, passwordHash]
     );
     return result.rows[0];
   }
 
-  async function findAdminByEmail(email) {
-    const result = await pool.query('SELECT id, email, password_hash FROM admins WHERE email = LOWER($1)', [email]);
+  async function findAdminByUsername(username) {
+    const result = await pool.query('SELECT id, username, password_hash FROM admins WHERE LOWER(username) = LOWER($1)', [username]);
     return result.rows[0] || null;
+  }
+
+  async function upsertAdminCredentials(username, passwordHash) {
+    const id = crypto.randomUUID();
+    const email = `${username}-${id.slice(0, 8)}@quiz.local`;
+    const result = await pool.query(
+      `INSERT INTO admins (id, email, username, password_hash)
+       VALUES ($1, LOWER($2), LOWER($3), $4)
+       ON CONFLICT (LOWER(username)) DO UPDATE
+       SET password_hash = EXCLUDED.password_hash, updated_at = NOW()
+       RETURNING id, username`,
+      [id, email, username, passwordHash]
+    );
+    return result.rows[0];
   }
 
   async function createGameSession({ id, quizId, roomCode, snapshot }) {
@@ -428,10 +516,14 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
     createQuiz,
     updateQuiz,
     replaceQuestions,
+    createQuestion,
+    updateQuestion,
+    deleteQuestion,
     archiveQuiz,
     countAdmins,
     createAdmin,
-    findAdminByEmail,
+    findAdminByUsername,
+    upsertAdminCredentials,
     createGameSession,
     updateGameSession,
     addParticipant,

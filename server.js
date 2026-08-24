@@ -2,6 +2,7 @@ const crypto = require('node:crypto');
 const http = require('node:http');
 const path = require('node:path');
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const session = require('express-session');
 const connectPgSimple = require('connect-pg-simple');
 const helmet = require('helmet');
@@ -156,7 +157,22 @@ function createQuizServer(options = {}) {
   app.use(express.json({ limit: '200kb' }));
   app.use(sessionMiddleware);
   io.engine.use(sessionMiddleware);
-  const ready = database.initialize(QUESTION_BANK, [EASY_QUIZ]);
+  const ready = (async () => {
+    await database.initialize(QUESTION_BANK, [EASY_QUIZ]);
+    if (!database.enabled) return;
+    const username = cleanText(process.env.ADMIN_USERNAME, 40).toLowerCase();
+    const password = String(process.env.ADMIN_PASSWORD || '');
+    if (!username || !password) return;
+    if (!/^[a-z0-9._-]{4,40}$/.test(username) || password.length < 10 || password.length > 128) {
+      throw new Error('ADMIN_USERNAME atau ADMIN_PASSWORD tidak memenuhi aturan keamanan.');
+    }
+    const existingAdmin = await database.findAdminByUsername(username);
+    const passwordMatches = existingAdmin && await bcrypt.compare(password, existingAdmin.password_hash);
+    if (!passwordMatches) {
+      const passwordHash = await bcrypt.hash(password, 12);
+      await database.upsertAdminCredentials(username, passwordHash);
+    }
+  })();
 
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => response.json({ ok: true, rooms: rooms.size, database: database.enabled }));

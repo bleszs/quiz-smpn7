@@ -566,6 +566,147 @@ select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 4px sol
   .quiz-admin-actions { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 44px; }
 }
 
+/* Full-screen participant and admin workspaces */
+.participant-runtime-state,
+.admin-runtime-state { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+
+.participant-main { min-height: 100svh; padding: 0; }
+.participant-body .screen { width: 100%; max-width: none; }
+.participant-body .home-screen { min-height: 100svh; border-radius: 0; box-shadow: none; grid-template-columns: minmax(0, 1.08fr) minmax(400px, .92fr); }
+.participant-body .home-visual { min-height: 100svh; }
+.participant-body .home-actions { padding: clamp(34px, 6vw, 84px); }
+.home-brand-logo { width: min(210px, 60%); height: auto; margin: 0 0 clamp(34px, 8vh, 72px); }
+.participant-body .choice-button,
+.participant-body .primary,
+.participant-body .secondary { border-radius: 10px; }
+.participant-body .lobby-screen,
+.participant-body .player-wait,
+.participant-body .quiz-screen,
+.participant-body .round-leaderboard-screen,
+.participant-body .result-screen,
+.participant-body .error-screen { min-height: 100svh; border-radius: 0; box-shadow: none; }
+.participant-body .room-board { border-radius: 0; }
+.participant-body .lobby-layout { min-height: calc(100svh - 205px); box-shadow: none; }
+.participant-body .question-layout { min-height: calc(100svh - 78px); }
+.participant-body .network-banner { top: 0; }
+
+.admin-body { min-height: 100svh; background: var(--canvas); }
+.admin-main { min-height: 100svh; padding: 0; }
+.admin-auth-panel { width: 100%; min-height: 100svh; margin: 0; padding: 0; grid-template-columns: minmax(0, 1.08fr) minmax(420px, .92fr); gap: 0; border-radius: 0; box-shadow: none; }
+.admin-auth-visual { position: relative; align-self: stretch; min-height: 100svh; overflow: hidden; background: var(--ink-deep); }
+.admin-auth-visual > img:first-child { width: 100%; height: 100%; object-fit: cover; }
+.admin-auth-visual::after { position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in oklch, var(--ink-deep) 8%, transparent), color-mix(in oklch, var(--ink-deep) 92%, transparent)); content: ""; }
+.admin-auth-visual-copy { position: absolute; z-index: 1; right: clamp(30px, 6vw, 84px); bottom: clamp(34px, 8vh, 92px); left: clamp(30px, 6vw, 84px); color: var(--surface); }
+.admin-auth-visual-copy > img { width: min(220px, 55%); margin-bottom: clamp(36px, 8vh, 72px); padding: 10px 14px; border-radius: 10px; background: var(--surface); }
+.admin-auth-visual-copy p { margin: 0 0 12px; color: var(--gold); font-weight: 850; }
+.admin-auth-visual-copy h1 { max-width: 11ch; color: var(--surface); font-size: clamp(2.7rem, 5vw, 5rem); letter-spacing: -.035em; }
+.admin-auth-visual-copy span { display: block; max-width: 54ch; margin-top: 18px; color: oklch(92% 0.014 190); line-height: 1.6; }
+.admin-auth-content { display: grid; width: min(520px, 100%); align-content: center; gap: 28px; justify-self: center; padding: clamp(34px, 7vw, 84px); }
+.admin-auth-content h2 { max-width: 13ch; font-size: 2.6rem; letter-spacing: -.035em; }
+.admin-auth-content .lead { margin-bottom: 0; }
+.admin-auth-form { padding: 0; background: transparent; }
+#adminLoading { width: 100%; min-height: 100svh; margin: 0; border-radius: 0; background: var(--surface); box-shadow: none; }
+
+.admin-shell { width: 100%; min-height: 100svh; margin: 0; grid-template-columns: 280px minmax(0, 1fr); border: 0; border-radius: 0; box-shadow: none; }
+.admin-sidebar { position: sticky; top: 0; height: 100svh; padding: 30px 24px; background: var(--ink-deep); }
+.admin-brand { display: block; }
+.admin-brand-logo { width: 174px; height: auto; margin-bottom: 22px; padding: 8px 10px; border-radius: 8px; background: var(--surface); }
+.admin-brand .intro { margin-bottom: 5px; }
+.admin-nav { margin-top: 6px; }
+.admin-sidebar-footer { display: grid; gap: 8px; }
+.admin-logout-button { min-height: 44px; margin-top: 5px; padding: 10px 12px; border: 1px solid color-mix(in oklch, var(--surface) 22%, transparent); border-radius: 9px; background: transparent; color: var(--surface); font-weight: 800; text-align: left; }
+.admin-logout-button:hover { border-color: var(--gold); color: var(--gold); }
+.admin-content { min-height: 100svh; padding: clamp(30px, 5vw, 72px); background: var(--surface); }
+.admin-page-heading { margin-bottom: 34px; }
+.admin-page-heading h1 { font-size: 3rem; letter-spacing: -.035em; }
+.admin-body .primary,
+.admin-body .secondary { border-radius: 9px; }
+.admin-summary { max-width: 760px; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; margin-bottom: 46px; border-block: 1px solid var(--line); }
+.admin-summary article { padding: 20px 4px; border: 0; border-radius: 0; background: transparent; }
+.admin-summary article + article { padding-left: 28px; border-left: 1px solid var(--line); }
+.admin-summary article::after { display: none; }
+.admin-list-heading { padding-bottom: 14px; border-bottom: 2px solid var(--ink); }
+.quiz-admin-list { display: block; }
+.quiz-admin-row { display: grid; min-height: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; padding: 22px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; }
+.quiz-admin-row:hover { border-color: var(--line); transform: none; box-shadow: none; background: color-mix(in oklch, var(--canvas) 55%, var(--surface)); }
+.quiz-admin-eyebrow { justify-content: flex-start; margin-bottom: 8px; }
+.quiz-question-count { color: var(--teal-dark); }
+.quiz-admin-actions { display: flex; margin: 0; padding: 0; }
+.quiz-admin-actions .primary,
+.quiz-admin-actions .secondary { min-width: 112px; }
+.quiz-delete-button { border-radius: 9px; }
+
+.quiz-editor-form > .quiz-meta-fields { padding: 0 0 30px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.quiz-meta-actions { display: flex; justify-content: flex-end; margin-top: -12px; }
+.question-editor-heading { margin-top: 14px; padding-bottom: 14px; border-bottom: 2px solid var(--ink); }
+.question-editor-list { gap: 0; }
+.question-editor-item { padding: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
+.question-editor-title { min-height: 86px; margin: 0; padding: 15px 4px; }
+.question-number { display: grid; width: 38px; height: 38px; flex: 0 0 auto; place-items: center; border-radius: 9px; background: var(--teal-pale); color: var(--teal-dark); font-weight: 900; }
+.question-editor-summary { min-width: 0; flex: 1; }
+.question-editor-summary strong,
+.question-editor-summary small { display: block; }
+.question-editor-summary strong { overflow: hidden; color: var(--ink); text-overflow: ellipsis; white-space: nowrap; }
+.question-editor-summary small { margin-top: 5px; color: var(--muted); font-size: .78rem; }
+.question-row-actions { display: flex; align-items: center; gap: 12px; }
+.compact-button { min-height: 40px; padding: 8px 14px; }
+.question-editor-fields { padding: 8px 4px 28px 50px; }
+.question-save-row { display: flex; justify-content: flex-end; margin-top: 18px; }
+.question-empty { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.editor-actions { position: static; margin-top: 12px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+
+@media (max-width: 900px) {
+  .participant-body .home-screen { grid-template-columns: 1fr; }
+  .participant-body .home-visual { min-height: 44svh; }
+  .participant-body .home-actions { min-height: 56svh; }
+  .home-brand-logo { margin-bottom: 30px; }
+  .admin-auth-panel { grid-template-columns: 1fr; }
+  .admin-auth-visual { min-height: 42svh; }
+  .admin-auth-content { min-height: 58svh; }
+  .admin-auth-visual-copy { bottom: 28px; }
+  .admin-auth-visual-copy > img { width: 170px; margin-bottom: 22px; }
+  .admin-auth-visual-copy h1 { max-width: 13ch; font-size: 2.8rem; }
+  .admin-auth-visual-copy span { display: none; }
+  .admin-shell { grid-template-columns: 1fr; }
+  .admin-sidebar { position: static; width: 100%; height: auto; padding: 20px; }
+  .admin-brand { display: flex; }
+  .admin-brand-logo { width: 150px; margin: 0 16px 0 0; }
+  .admin-sidebar-footer { width: 100%; }
+  .admin-content { min-height: auto; }
+}
+
+@media (max-width: 620px) {
+  .participant-main { padding: 0; }
+  .participant-body .home-visual { min-height: 38svh; }
+  .participant-body .home-actions { min-height: 62svh; padding: 30px 20px; }
+  .participant-body .visual-overlay h1 { font-size: 2.6rem; }
+  .participant-body .visual-overlay span { display: none; }
+  .home-brand-logo { width: 160px; margin-bottom: 26px; }
+  .admin-main { padding: 0; }
+  .admin-auth-visual { min-height: 38svh; }
+  .admin-auth-content { min-height: 62svh; padding: 30px 20px; }
+  .admin-auth-content h2 { font-size: 2.25rem; }
+  .admin-auth-visual-copy { right: 22px; bottom: 24px; left: 22px; }
+  .admin-auth-visual-copy > img { display: none; }
+  .admin-auth-visual-copy h1 { font-size: 2.35rem; }
+  .admin-sidebar { align-items: stretch; }
+  .admin-brand { align-items: center; }
+  .admin-brand-logo { width: 130px; }
+  .admin-content { padding: 28px 18px; }
+  .admin-page-heading h1 { font-size: 2.35rem; }
+  .admin-summary { grid-template-columns: 1fr; margin-bottom: 34px; }
+  .admin-summary article + article { padding-left: 4px; border-top: 1px solid var(--line); border-left: 0; }
+  .quiz-admin-row { grid-template-columns: 1fr; gap: 18px; }
+  .quiz-admin-actions { display: grid; grid-template-columns: 1fr 1fr 44px; }
+  .quiz-admin-actions .primary,
+  .quiz-admin-actions .secondary { min-width: 0; }
+  .question-editor-title { align-items: flex-start; flex-wrap: wrap; }
+  .question-editor-summary { width: calc(100% - 54px); flex: none; }
+  .question-row-actions { width: 100%; justify-content: flex-end; padding-left: 50px; }
+  .question-editor-fields { padding-left: 4px; }
+  .quiz-meta-actions .primary { width: 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; transform: none !important; }
 }

@@ -60,6 +60,12 @@ function validateQuestions(body) {
   return { value: questions };
 }
 
+function validateQuestion(body) {
+  const validated = validateQuestions({ questions: [body] });
+  if (validated.error) return validated;
+  return { value: validated.value[0] };
+}
+
 function createAdminRouter(database) {
   const router = express.Router();
   const loginLimiter = rateLimit({
@@ -88,7 +94,7 @@ function createAdminRouter(database) {
       response.json({
         ok: true,
         authenticated: Boolean(request.session?.adminId),
-        admin: request.session?.adminId ? { id: request.session.adminId, email: request.session.adminEmail } : null,
+        admin: request.session?.adminId ? { id: request.session.adminId, username: request.session.adminUsername } : null,
         setupRequired: adminCount === 0
       });
     } catch (error) { next(error); }
@@ -101,31 +107,33 @@ function createAdminRouter(database) {
       if (!expectedToken || !secureEqual(request.body.setupToken, expectedToken)) {
         return response.status(403).json({ ok: false, error: 'Setup token tidak valid.' });
       }
-      const email = clean(request.body.email, 160).toLowerCase();
+      const username = clean(request.body.username, 40).toLowerCase();
       const password = String(request.body.password || '');
-      if (!/^\S+@\S+\.\S+$/.test(email)) return response.status(400).json({ ok: false, error: 'Email tidak valid.' });
+      if (!/^[a-z0-9._-]{4,40}$/.test(username)) {
+        return response.status(400).json({ ok: false, error: 'Username minimal 4 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung.' });
+      }
       if (password.length < 10 || password.length > 128) {
         return response.status(400).json({ ok: false, error: 'Password minimal 10 karakter.' });
       }
       const passwordHash = await bcrypt.hash(password, 12);
-      const admin = await database.createAdmin(email, passwordHash);
+      const admin = await database.createAdmin(username, passwordHash);
       request.session.adminId = admin.id;
-      request.session.adminEmail = admin.email;
+      request.session.adminUsername = admin.username;
       response.status(201).json({ ok: true, admin });
     } catch (error) { next(error); }
   });
 
   router.post('/login', loginLimiter, async (request, response, next) => {
     try {
-      const email = clean(request.body.email, 160).toLowerCase();
-      const admin = await database.findAdminByEmail(email);
+      const username = clean(request.body.username, 40).toLowerCase();
+      const admin = await database.findAdminByUsername(username);
       const valid = admin && await bcrypt.compare(String(request.body.password || ''), admin.password_hash);
-      if (!valid) return response.status(401).json({ ok: false, error: 'Email atau password salah.' });
+      if (!valid) return response.status(401).json({ ok: false, error: 'Username atau password salah.' });
       request.session.regenerate((regenerateError) => {
         if (regenerateError) return next(regenerateError);
         request.session.adminId = admin.id;
-        request.session.adminEmail = admin.email;
-        response.json({ ok: true, admin: { id: admin.id, email: admin.email } });
+        request.session.adminUsername = admin.username;
+        response.json({ ok: true, admin: { id: admin.id, username: admin.username } });
       });
     } catch (error) { next(error); }
   });
@@ -181,6 +189,35 @@ function createAdminRouter(database) {
     } catch (error) { next(error); }
   });
 
+  router.post('/quizzes/:id/questions', requireAdmin, async (request, response, next) => {
+    try {
+      const existing = await database.getQuiz(request.params.id);
+      if (!existing) return response.status(404).json({ ok: false, error: 'Quiz tidak ditemukan.' });
+      const validated = validateQuestion(request.body);
+      if (validated.error) return response.status(400).json({ ok: false, error: validated.error });
+      const question = await database.createQuestion(request.params.id, validated.value);
+      response.status(201).json({ ok: true, question });
+    } catch (error) { next(error); }
+  });
+
+  router.put('/quizzes/:id/questions/:questionId', requireAdmin, async (request, response, next) => {
+    try {
+      const validated = validateQuestion(request.body);
+      if (validated.error) return response.status(400).json({ ok: false, error: validated.error });
+      const question = await database.updateQuestion(request.params.id, request.params.questionId, validated.value);
+      if (!question) return response.status(404).json({ ok: false, error: 'Pertanyaan tidak ditemukan.' });
+      response.json({ ok: true, question });
+    } catch (error) { next(error); }
+  });
+
+  router.delete('/quizzes/:id/questions/:questionId', requireAdmin, async (request, response, next) => {
+    try {
+      const deleted = await database.deleteQuestion(request.params.id, request.params.questionId);
+      if (!deleted) return response.status(404).json({ ok: false, error: 'Pertanyaan tidak ditemukan.' });
+      response.json({ ok: true });
+    } catch (error) { next(error); }
+  });
+
   router.delete('/quizzes/:id', requireAdmin, async (request, response, next) => {
     try {
       const archived = await database.archiveQuiz(request.params.id);
@@ -205,4 +242,4 @@ function createAdminRouter(database) {
   return router;
 }
 
-module.exports = { createAdminRouter, validateQuiz, validateQuestions };
+module.exports = { createAdminRouter, validateQuiz, validateQuestion, validateQuestions };

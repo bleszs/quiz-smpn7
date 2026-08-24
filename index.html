@@ -9,13 +9,11 @@
   <link rel="icon" href="/assets/favicon.ico" sizes="any" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
-  <header class="appbar">
-    <div class="connection-wrap">
-      <span id="roomChip" class="room-chip hidden"></span>
-      <span id="connectionStatus" class="connection-status" data-state="connecting"><span aria-hidden="true"></span> Menghubungkan</span>
-    </div>
-  </header>
+<body class="participant-body">
+  <div class="participant-runtime-state" aria-live="polite">
+    <span id="roomChip" class="hidden"></span>
+    <span id="connectionStatus" class="hidden" data-state="connecting"><span aria-hidden="true"></span> Menghubungkan</span>
+  </div>
 
   <div id="networkBanner" class="network-banner hidden" role="status" aria-live="assertive">
     <div>
@@ -25,7 +23,7 @@
     <button id="retryConnectionButton" class="network-retry" type="button">Coba sekarang</button>
   </div>
 
-  <main>
+  <main class="participant-main">
     <section id="homeScreen" class="screen home-screen">
       <div class="home-visual">
         <img src="assets/kampung-silalas.jpg" alt="Suasana Kampung Silalas di tepian Sungai Deli" />
@@ -38,6 +36,7 @@
 
       <div class="home-actions">
         <div id="roleChooser" class="role-chooser">
+          <img class="home-brand-logo" src="/assets/medan-simpang-logo.png" alt="Medan Simpang" />
           <p class="intro">Kuis kelas realtime</p>
           <h2>Masuk ke permainan</h2>
           <p class="lead">Masukkan kode dari host, kemudian isi nama dan kelasmu. Kamu juga bisa masuk langsung dengan memindai QR room.</p>

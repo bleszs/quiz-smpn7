@@ -10,13 +10,10 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body class="admin-body">
-  <header class="appbar">
-    <div class="connection-wrap">
-      <span id="adminRoomChip" class="room-chip hidden"></span>
-      <span id="adminConnection" class="connection-status" data-state="connecting"><span aria-hidden="true"></span> Menghubungkan</span>
-      <button id="logoutButton" class="admin-header-button hidden" type="button">Keluar</button>
-    </div>
-  </header>
+  <div class="admin-runtime-state" aria-live="polite">
+    <span id="adminRoomChip" class="hidden"></span>
+    <span id="adminConnection" class="hidden" data-state="connecting"><span aria-hidden="true"></span> Menghubungkan</span>
+  </div>
 
   <main class="admin-main">
     <section id="adminLoading" class="admin-auth-panel">
@@ -25,38 +22,56 @@
     </section>
 
     <section id="adminLogin" class="admin-auth-panel hidden">
-      <div>
-        <p class="intro">Khusus pengelola</p>
-        <h1>Login admin</h1>
-        <p class="lead">Kelola quiz, pertanyaan, room permainan, dan hasil peserta.</p>
+      <div class="admin-auth-visual">
+        <img src="/assets/kampung-silalas.jpg" alt="Suasana Kampung Silalas di tepian Sungai Deli" />
+        <div class="admin-auth-visual-copy">
+          <img src="/assets/medan-simpang-logo.png" alt="Medan Simpang" />
+          <p>Panel pengelola quiz</p>
+          <h1>Siapkan permainan untuk membaca kota.</h1>
+          <span>Kelola pertanyaan, buka room, dan pantau hasil peserta dari satu tempat.</span>
+        </div>
       </div>
-      <form id="loginForm" class="entry-form admin-auth-form">
-        <label class="field"><span>Email</span><input id="loginEmail" type="email" autocomplete="username" required /></label>
-        <label class="field"><span>Password</span><input id="loginPassword" type="password" autocomplete="current-password" minlength="10" required /></label>
-        <p id="loginError" class="form-error hidden" role="alert"></p>
-        <button class="primary full-width" type="submit">Login</button>
-      </form>
+      <div class="admin-auth-content">
+        <div>
+          <p class="intro">Khusus pengelola</p>
+          <h2>Masuk sebagai admin</h2>
+          <p class="lead compact">Gunakan akun pengelola Quiz Medan Simpang.</p>
+        </div>
+        <form id="loginForm" class="entry-form admin-auth-form">
+          <label class="field"><span>Username</span><input id="loginUsername" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required /></label>
+          <label class="field"><span>Password</span><input id="loginPassword" type="password" autocomplete="current-password" minlength="10" required /></label>
+          <p id="loginError" class="form-error hidden" role="alert"></p>
+          <button class="primary full-width" type="submit">Masuk ke dashboard</button>
+        </form>
+      </div>
     </section>
 
     <section id="adminSetup" class="admin-auth-panel hidden">
-      <div>
-        <p class="intro">Setup satu kali</p>
-        <h1>Buat admin pertama</h1>
-        <p class="lead">Gunakan setup token Railway. Password akan di-hash sebelum disimpan.</p>
+      <div class="admin-auth-visual">
+        <img src="/assets/kampung-silalas.jpg" alt="Suasana Kampung Silalas di tepian Sungai Deli" />
+        <div class="admin-auth-visual-copy">
+          <img src="/assets/medan-simpang-logo.png" alt="Medan Simpang" />
+          <p>Persiapan awal</p>
+          <h1>Buat akses pengelola pertama.</h1>
+          <span>Akun ini digunakan untuk mengelola quiz, room, dan hasil permainan.</span>
+        </div>
       </div>
-      <form id="setupForm" class="entry-form admin-auth-form">
-        <label class="field"><span>Setup token</span><input id="setupToken" type="password" autocomplete="off" required /></label>
-        <label class="field"><span>Email admin</span><input id="setupEmail" type="email" autocomplete="email" required /></label>
-        <label class="field"><span>Password baru</span><input id="setupPassword" type="password" autocomplete="new-password" minlength="10" required /></label>
-        <p id="setupError" class="form-error hidden" role="alert"></p>
-        <button class="primary full-width" type="submit">Buat admin</button>
-      </form>
+      <div class="admin-auth-content">
+        <div><p class="intro">Setup satu kali</p><h2>Buat admin pertama</h2></div>
+        <form id="setupForm" class="entry-form admin-auth-form">
+          <label class="field"><span>Setup token</span><input id="setupToken" type="password" autocomplete="off" required /></label>
+          <label class="field"><span>Username admin</span><input id="setupUsername" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required /></label>
+          <label class="field"><span>Password baru</span><input id="setupPassword" type="password" autocomplete="new-password" minlength="10" required /></label>
+          <p id="setupError" class="form-error hidden" role="alert"></p>
+          <button class="primary full-width" type="submit">Buat admin</button>
+        </form>
+      </div>
     </section>
 
     <section id="adminDashboard" class="admin-shell hidden">
       <aside class="admin-sidebar">
         <div class="admin-brand">
-          <span class="admin-brand-mark" aria-hidden="true">MS</span>
+          <img class="admin-brand-logo" src="/assets/medan-simpang-logo.png" alt="Medan Simpang" />
           <div><p class="intro">Panel pengelola</p><h2>Quiz Medan Simpang</h2></div>
         </div>
         <nav class="admin-nav" aria-label="Navigasi admin">
@@ -66,6 +81,7 @@
         <div class="admin-sidebar-footer">
           <p>Lihat tampilan yang digunakan peserta untuk masuk ke room.</p>
           <a class="admin-participant-link" href="/join" target="_blank" rel="noopener">Buka halaman peserta <span aria-hidden="true">↗</span></a>
+          <button id="logoutButton" class="admin-logout-button hidden" type="button">Keluar dari admin</button>
         </div>
       </aside>
       <div class="admin-content">
@@ -76,7 +92,6 @@
           </div>
           <div class="admin-summary" aria-label="Ringkasan quiz">
             <article><span>Total quiz</span><strong id="adminQuizTotal">0</strong><small>tersimpan</small></article>
-            <article><span>Siap dimainkan</span><strong id="adminQuizPublished">0</strong><small>published</small></article>
             <article><span>Total soal</span><strong id="adminQuestionTotal">0</strong><small>dari semua quiz</small></article>
           </div>
           <div class="admin-list-heading"><div><h2>Koleksi quiz</h2><p>Pilih quiz untuk diedit atau buat room permainan.</p></div><span id="adminQuizCountLabel">0 quiz</span></div>
@@ -85,21 +100,22 @@
 
         <section id="quizEditorView" class="hidden">
           <button id="backToQuizzes" class="back-link" type="button">← Kembali ke daftar</button>
-          <div class="admin-page-heading"><div><p class="intro">Quiz editor</p><h1 id="editorTitle">Buat quiz</h1></div><span id="saveState" class="save-state"></span></div>
+          <div class="admin-page-heading"><div><p class="intro">Quiz editor</p><h1 id="editorTitle">Buat quiz</h1><p class="lead compact">Simpan informasi quiz, lalu kelola setiap pertanyaan secara terpisah.</p></div><span id="saveState" class="save-state"></span></div>
           <form id="quizEditorForm" class="quiz-editor-form">
             <div class="quiz-meta-fields">
               <label class="field"><span>Judul quiz</span><input id="quizTitleInput" maxlength="100" required /></label>
               <label class="field"><span>Status</span><select id="quizStatusInput"><option value="draft">Draft</option><option value="published">Published</option><option value="archived">Archived</option></select></label>
               <label class="field field-wide"><span>Deskripsi</span><textarea id="quizDescriptionInput" maxlength="500" rows="3"></textarea></label>
             </div>
-            <div class="question-editor-heading"><div><h2>Pertanyaan</h2><p>Atur pilihan, jawaban benar, timer, dan poin maksimum.</p></div><button id="addQuestionButton" class="secondary" type="button">+ Tambah soal</button></div>
+            <div class="quiz-meta-actions"><button class="primary" type="submit">Simpan informasi quiz</button></div>
+            <div class="question-editor-heading"><div><h2>Daftar pertanyaan</h2><p><span id="editorQuestionCount">0 soal</span> · Setiap soal dapat diedit atau dihapus sendiri.</p></div><button id="addQuestionButton" class="secondary" type="button">+ Tambah soal</button></div>
             <div id="questionEditorList" class="question-editor-list"></div>
-            <div class="editor-actions"><button class="primary" type="submit">Simpan quiz</button><button id="cancelEditorButton" class="secondary" type="button">Batal</button></div>
+            <div class="editor-actions"><button id="cancelEditorButton" class="secondary" type="button">Selesai dan kembali</button></div>
           </form>
         </section>
 
         <section id="resultsView" class="hidden">
-          <div class="admin-page-heading"><div><p class="intro">Riwayat</p><h1>Hasil permainan</h1><p class="lead compact">Game yang dibuat tersimpan permanen di PostgreSQL.</p></div></div>
+          <div class="admin-page-heading"><div><p class="intro">Riwayat</p><h1>Hasil permainan</h1><p class="lead compact">Riwayat permainan tersimpan dan dapat dilihat kembali kapan saja.</p></div></div>
           <div id="resultsList" class="results-admin-list"></div>
           <div id="resultDetail" class="result-detail hidden"></div>
         </section>

@@ -115,9 +115,7 @@ async function loadQuizzes() {
   const data = await api('/quizzes');
   adminState.quizzes = data.quizzes || [];
   const totalQuestions = adminState.quizzes.reduce((total, quiz) => total + Number(quiz.question_count || 0), 0);
-  const publishedQuizzes = adminState.quizzes.filter((quiz) => quiz.status === 'published').length;
   $('adminQuizTotal').textContent = String(adminState.quizzes.length);
-  $('adminQuizPublished').textContent = String(publishedQuizzes);
   $('adminQuestionTotal').textContent = String(totalQuestions);
   $('adminQuizCountLabel').textContent = `${adminState.quizzes.length} quiz`;
   const list = $('quizList');
@@ -135,14 +133,10 @@ async function loadQuizzes() {
     info.className = 'quiz-admin-info';
     const eyebrow = document.createElement('div');
     eyebrow.className = 'quiz-admin-eyebrow';
-    const status = document.createElement('span');
-    status.className = 'quiz-status';
-    status.dataset.status = quiz.status;
-    status.textContent = quiz.status === 'published' ? 'Siap dimainkan' : quiz.status;
     const questionCount = document.createElement('span');
     questionCount.className = 'quiz-question-count';
     questionCount.textContent = `${quiz.question_count} soal`;
-    eyebrow.append(status, questionCount);
+    eyebrow.append(questionCount);
     const title = document.createElement('h3');
     title.textContent = quiz.title;
     const meta = document.createElement('p');
@@ -163,48 +157,128 @@ async function loadQuizzes() {
 }
 
 function blankQuestion() {
-  return { category: '', prompt: '', options: ['', '', '', ''], correctOptionIndex: 0, timeLimitSeconds: 10, basePoints: 1000, explanation: '', imageUrl: '', altText: '' };
+  return { id: null, category: '', prompt: '', options: ['', '', '', ''], correctOptionIndex: 0, timeLimitSeconds: 10, basePoints: 1000, explanation: '', imageUrl: '', altText: '', expanded: true };
 }
 
 function questionFromApi(question) {
   return {
+    id: question.id,
     category: question.category || '',
     prompt: question.question || '',
     options: question.options || ['', '', '', ''],
-    correctOptionIndex: question.correctIndex || 0,
+    correctOptionIndex: question.correctIndex ?? 0,
     timeLimitSeconds: Math.round((question.timeLimitMs || 10_000) / 1000),
-    basePoints: question.basePoints || 1000,
+    basePoints: question.basePoints ?? 1000,
     explanation: question.explanation || '',
     imageUrl: question.image || '',
-    altText: question.alt || ''
+    altText: question.alt || '',
+    expanded: false
   };
+}
+
+function questionBody(question) {
+  return {
+    category: question.category,
+    prompt: question.prompt,
+    options: question.options,
+    correctOptionIndex: question.correctOptionIndex,
+    timeLimitSeconds: question.timeLimitSeconds,
+    basePoints: question.basePoints,
+    explanation: question.explanation,
+    imageUrl: question.imageUrl,
+    altText: question.altText
+  };
+}
+
+async function saveQuestion(question, index, button) {
+  if (!adminState.editingQuiz) return adminToast('Simpan informasi quiz terlebih dahulu.');
+  setAdminBusy(button, true, 'Menyimpan…');
+  try {
+    const path = question.id
+      ? `/quizzes/${adminState.editingQuiz.id}/questions/${question.id}`
+      : `/quizzes/${adminState.editingQuiz.id}/questions`;
+    const method = question.id ? 'PUT' : 'POST';
+    const data = await api(path, { method, body: JSON.stringify(questionBody(question)) });
+    adminState.questions[index] = questionFromApi(data.question);
+    renderQuestionEditors();
+    await loadQuizzes();
+    adminToast(question.id ? 'Perubahan soal disimpan.' : 'Soal baru ditambahkan.');
+  } catch (error) {
+    adminToast(error.message);
+    setAdminBusy(button, false);
+  }
+}
+
+async function deleteQuestion(question, index) {
+  if (!question.id) {
+    adminState.questions.splice(index, 1);
+    renderQuestionEditors();
+    return;
+  }
+  if (!window.confirm(`Hapus soal ${index + 1}? Tindakan ini tidak dapat dibatalkan.`)) return;
+  try {
+    await api(`/quizzes/${adminState.editingQuiz.id}/questions/${question.id}`, { method: 'DELETE' });
+    adminState.questions.splice(index, 1);
+    renderQuestionEditors();
+    await loadQuizzes();
+    adminToast('Pertanyaan berhasil dihapus.');
+  } catch (error) { adminToast(error.message); }
 }
 
 function renderQuestionEditors() {
   const list = $('questionEditorList');
+  $('editorQuestionCount').textContent = `${adminState.questions.length} soal`;
+  if (!adminState.editingQuiz) {
+    const message = document.createElement('div');
+    message.className = 'admin-empty question-empty';
+    message.innerHTML = '<strong>Simpan informasi quiz terlebih dahulu.</strong><p>Setelah quiz dibuat, tombol tambah soal akan aktif dan setiap pertanyaan dapat dikelola sendiri.</p>';
+    list.replaceChildren(message);
+    $('addQuestionButton').disabled = true;
+    return;
+  }
+  $('addQuestionButton').disabled = adminState.questions.some((question) => !question.id);
+  if (!adminState.questions.length) {
+    const message = document.createElement('div');
+    message.className = 'admin-empty question-empty';
+    message.innerHTML = '<strong>Belum ada pertanyaan.</strong><p>Tambahkan soal pertama untuk quiz ini.</p>';
+    list.replaceChildren(message);
+    return;
+  }
   list.replaceChildren(...adminState.questions.map((question, index) => {
     const panel = document.createElement('article');
     panel.className = 'question-editor-item';
+    panel.dataset.expanded = String(Boolean(question.expanded));
     panel.innerHTML = `
-      <div class="question-editor-title"><strong>Soal ${index + 1}</strong><button type="button" class="text-button danger-text" data-remove>Hapus</button></div>
-      <div class="quiz-meta-fields">
-        <label class="field field-wide"><span>Pertanyaan</span><textarea data-key="prompt" rows="2" maxlength="500" required></textarea></label>
-        <label class="field"><span>Kategori</span><input data-key="category" maxlength="80" /></label>
-        <label class="field"><span>Jawaban benar</span><select data-key="correctOptionIndex"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label>
-        <label class="field"><span>Timer (detik)</span><input data-key="timeLimitSeconds" type="number" min="3" max="120" /></label>
-        <label class="field"><span>Poin maksimum</span><input data-key="basePoints" type="number" min="0" max="100000" step="10" /></label>
+      <div class="question-editor-title">
+        <span class="question-number">${index + 1}</span>
+        <div class="question-editor-summary"><strong></strong><small>${question.category || 'Tanpa kategori'} · ${question.timeLimitSeconds} detik · ${question.basePoints} poin</small></div>
+        <div class="question-row-actions">
+          <button type="button" class="secondary compact-button" data-toggle>${question.expanded ? 'Tutup' : 'Edit'}</button>
+          <button type="button" class="text-button danger-text" data-remove>Hapus</button>
+        </div>
       </div>
-      <div class="option-editor-grid">
-        <label class="field"><span>Pilihan A</span><input data-option="0" maxlength="200" required /></label>
-        <label class="field"><span>Pilihan B</span><input data-option="1" maxlength="200" required /></label>
-        <label class="field"><span>Pilihan C</span><input data-option="2" maxlength="200" required /></label>
-        <label class="field"><span>Pilihan D</span><input data-option="3" maxlength="200" required /></label>
-      </div>
-      <div class="quiz-meta-fields">
-        <label class="field field-wide"><span>Penjelasan jawaban</span><textarea data-key="explanation" rows="2" maxlength="500"></textarea></label>
-        <label class="field"><span>URL/path gambar</span><input data-key="imageUrl" maxlength="500" placeholder="assets/contoh.jpg" /></label>
-        <label class="field"><span>Deskripsi gambar</span><input data-key="altText" maxlength="250" /></label>
+      <div class="question-editor-fields ${question.expanded ? '' : 'hidden'}">
+        <div class="quiz-meta-fields">
+          <label class="field field-wide"><span>Pertanyaan</span><textarea data-key="prompt" rows="2" maxlength="500"></textarea></label>
+          <label class="field"><span>Kategori</span><input data-key="category" maxlength="80" /></label>
+          <label class="field"><span>Jawaban benar</span><select data-key="correctOptionIndex"><option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option></select></label>
+          <label class="field"><span>Timer (detik)</span><input data-key="timeLimitSeconds" type="number" min="3" max="120" /></label>
+          <label class="field"><span>Poin maksimum</span><input data-key="basePoints" type="number" min="0" max="100000" step="10" /></label>
+        </div>
+        <div class="option-editor-grid">
+          <label class="field"><span>Pilihan A</span><input data-option="0" maxlength="200" /></label>
+          <label class="field"><span>Pilihan B</span><input data-option="1" maxlength="200" /></label>
+          <label class="field"><span>Pilihan C</span><input data-option="2" maxlength="200" /></label>
+          <label class="field"><span>Pilihan D</span><input data-option="3" maxlength="200" /></label>
+        </div>
+        <div class="quiz-meta-fields">
+          <label class="field field-wide"><span>Penjelasan jawaban</span><textarea data-key="explanation" rows="2" maxlength="500"></textarea></label>
+          <label class="field"><span>URL/path gambar</span><input data-key="imageUrl" maxlength="500" placeholder="assets/contoh.jpg" /></label>
+          <label class="field"><span>Deskripsi gambar</span><input data-key="altText" maxlength="250" /></label>
+        </div>
+        <div class="question-save-row"><button type="button" class="primary compact-button" data-save>${question.id ? 'Simpan perubahan' : 'Simpan soal baru'}</button></div>
       </div>`;
+    panel.querySelector('.question-editor-summary strong').textContent = question.prompt || 'Soal baru belum diisi';
     panel.querySelectorAll('[data-key]').forEach((input) => {
       input.value = question[input.dataset.key];
       input.addEventListener('input', () => { question[input.dataset.key] = input.type === 'number' ? Number(input.value) : input.value; });
@@ -213,10 +287,9 @@ function renderQuestionEditors() {
       input.value = question.options[Number(input.dataset.option)] || '';
       input.addEventListener('input', () => { question.options[Number(input.dataset.option)] = input.value; });
     });
-    panel.querySelector('[data-remove]').addEventListener('click', () => {
-      adminState.questions.splice(index, 1);
-      renderQuestionEditors();
-    });
+    panel.querySelector('[data-toggle]').addEventListener('click', () => { question.expanded = !question.expanded; renderQuestionEditors(); });
+    panel.querySelector('[data-remove]').addEventListener('click', () => deleteQuestion(question, index));
+    panel.querySelector('[data-save]').addEventListener('click', (event) => saveQuestion(question, index, event.currentTarget));
     return panel;
   }));
 }
@@ -235,7 +308,7 @@ async function editQuiz(id) {
 
 function newQuiz() {
   adminState.editingQuiz = null;
-  adminState.questions = [blankQuestion()];
+  adminState.questions = [];
   $('editorTitle').textContent = 'Buat quiz';
   $('quizTitleInput').value = '';
   $('quizDescriptionInput').value = '';
@@ -255,15 +328,16 @@ async function saveQuiz(event) {
       description: $('quizDescriptionInput').value,
       status: $('quizStatusInput').value
     };
-    let quiz;
-    if (adminState.editingQuiz) quiz = (await api(`/quizzes/${adminState.editingQuiz.id}`, { method: 'PUT', body: JSON.stringify(body) })).quiz;
-    else quiz = (await api('/quizzes', { method: 'POST', body: JSON.stringify(body) })).quiz;
-    quiz = (await api(`/quizzes/${quiz.id}/questions`, { method: 'PUT', body: JSON.stringify({ questions: adminState.questions }) })).quiz;
+    const creating = !adminState.editingQuiz;
+    const quiz = creating
+      ? (await api('/quizzes', { method: 'POST', body: JSON.stringify(body) })).quiz
+      : (await api(`/quizzes/${adminState.editingQuiz.id}`, { method: 'PUT', body: JSON.stringify(body) })).quiz;
     adminState.editingQuiz = quiz;
+    $('editorTitle').textContent = `Edit ${quiz.title}`;
     $('saveState').textContent = 'Tersimpan';
-    adminToast('Quiz berhasil disimpan.');
+    adminToast(creating ? 'Quiz dibuat. Sekarang tambahkan pertanyaan.' : 'Informasi quiz disimpan.');
+    renderQuestionEditors();
     await loadQuizzes();
-    showDashboardView('quizListView');
   } catch (error) {
     $('saveState').textContent = error.message;
   } finally { setAdminBusy(button, false); }
@@ -516,19 +590,26 @@ adminSocket.on('room:finished', renderAdminResult);
 
 $('loginForm').addEventListener('submit', async (event) => {
   event.preventDefault(); const button = event.submitter; setAdminBusy(button, true, 'Login…'); adminError('loginError');
-  try { await api('/login', { method: 'POST', body: JSON.stringify({ email: $('loginEmail').value, password: $('loginPassword').value }) }); adminSocket.disconnect().connect(); $('logoutButton').classList.remove('hidden'); await openDashboard(); }
+  try { await api('/login', { method: 'POST', body: JSON.stringify({ username: $('loginUsername').value, password: $('loginPassword').value }) }); adminSocket.disconnect().connect(); $('logoutButton').classList.remove('hidden'); await openDashboard(); }
   catch (error) { adminError('loginError', error.message); } finally { setAdminBusy(button, false); }
 });
 $('setupForm').addEventListener('submit', async (event) => {
   event.preventDefault(); const button = event.submitter; setAdminBusy(button, true, 'Membuat…'); adminError('setupError');
-  try { await api('/setup', { method: 'POST', body: JSON.stringify({ setupToken: $('setupToken').value, email: $('setupEmail').value, password: $('setupPassword').value }) }); adminSocket.disconnect().connect(); $('logoutButton').classList.remove('hidden'); await openDashboard(); }
+  try { await api('/setup', { method: 'POST', body: JSON.stringify({ setupToken: $('setupToken').value, username: $('setupUsername').value, password: $('setupPassword').value }) }); adminSocket.disconnect().connect(); $('logoutButton').classList.remove('hidden'); await openDashboard(); }
   catch (error) { adminError('setupError', error.message); } finally { setAdminBusy(button, false); }
 });
 $('logoutButton').addEventListener('click', async () => { await api('/logout', { method: 'POST' }); saveHostSession(null); window.location.reload(); });
 $('newQuizButton').addEventListener('click', newQuiz);
 $('backToQuizzes').addEventListener('click', () => showDashboardView('quizListView'));
-$('cancelEditorButton').addEventListener('click', () => showDashboardView('quizListView'));
-$('addQuestionButton').addEventListener('click', () => { adminState.questions.push(blankQuestion()); renderQuestionEditors(); });
+$('cancelEditorButton').addEventListener('click', async () => { showDashboardView('quizListView'); await loadQuizzes(); });
+$('addQuestionButton').addEventListener('click', () => {
+  if (!adminState.editingQuiz) return adminToast('Simpan informasi quiz terlebih dahulu.');
+  if (adminState.questions.some((question) => !question.id)) return adminToast('Selesaikan soal baru yang sedang dibuat.');
+  adminState.questions.forEach((question) => { question.expanded = false; });
+  adminState.questions.push(blankQuestion());
+  renderQuestionEditors();
+  $('questionEditorList').lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
 $('quizEditorForm').addEventListener('submit', saveQuiz);
 document.querySelectorAll('[data-admin-view]').forEach((button) => button.addEventListener('click', async () => {
   document.querySelectorAll('[data-admin-view]').forEach((item) => { item.dataset.active = String(item === button); });
