@@ -31,6 +31,9 @@ function showAdminScreen(id) {
 
 function showDashboardView(id) {
   ['quizListView', 'quizEditorView', 'resultsView'].forEach((view) => $(view).classList.toggle('hidden', view !== id));
+  const content = document.querySelector('.admin-content');
+  if (content) content.scrollTo({ top: 0, behavior: 'auto' });
+  window.scrollTo({ top: 0, behavior: 'auto' });
 }
 
 function setAdminBusy(button, busy, label = 'Memproses…') {
