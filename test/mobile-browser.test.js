@@ -170,6 +170,11 @@ test('sentuhan pointer mobile dapat memilih dan mengirim jawaban', {
   await cdp.send('Page.navigate', { url: `${appUrl}/?room=${created.code}` });
   await waitForExpression(cdp, "document.readyState === 'complete' && document.querySelector('#joinForm:not(.hidden)')");
   await waitForExpression(cdp, "document.querySelector('#connectionStatus')?.dataset.state === 'online'");
+  const mobileLayout = await evaluate(cdp, `({
+    viewportWidth: window.innerWidth,
+    pageWidth: document.documentElement.scrollWidth
+  })`);
+  assert.equal(mobileLayout.pageWidth, mobileLayout.viewportWidth, 'halaman peserta tidak boleh melebar horizontal di perangkat mobile');
 
   await evaluate(cdp, `(() => {
     document.querySelector('#playerNameInput').value = 'Uji Sentuh Mobile';
