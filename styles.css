@@ -642,7 +642,7 @@ select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 4px sol
 
 .quiz-editor-form > .quiz-meta-fields { padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: color-mix(in oklch, var(--canvas) 42%, var(--surface)); }
 .quiz-meta-actions { display: flex; justify-content: flex-end; margin-top: -10px; }
-.question-editor-heading { position: sticky; z-index: 2; top: 0; margin-top: 12px; padding: 16px 0 14px; border-bottom: 2px solid var(--ink); background: var(--surface); }
+.question-editor-heading { margin-top: 12px; padding: 16px 0 14px; border-bottom: 2px solid var(--ink); }
 .question-editor-list { gap: 0; }
 .question-editor-item { padding: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; }
 .question-editor-title { min-height: 86px; margin: 0; padding: 15px 4px; }
@@ -677,7 +677,6 @@ select:focus-visible, textarea:focus-visible, a:focus-visible { outline: 4px sol
   .admin-sidebar-footer { width: auto; margin-top: 0; padding-top: 0; border-top: 0; }
   .admin-sidebar-footer p { display: none; }
   .admin-content { height: auto; min-height: auto; overflow: visible; }
-  .question-editor-heading { position: static; }
 }
 
 @media (max-width: 620px) {
