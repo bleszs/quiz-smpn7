@@ -1,6 +1,21 @@
 const crypto = require('node:crypto');
 const { Pool } = require('pg');
 
+const LEGACY_QUESTION_IMAGE_URLS = [
+  'assets/deli-riverview.jpg',
+  'assets/jajanan-lokal.jpg',
+  'assets/jembatan-rel.jpg',
+  'assets/kampung-silalas.jpg',
+  'assets/masjid-silalas.jpg',
+  'assets/rumah-qohwah.jpg',
+  '/assets/deli-riverview.jpg',
+  '/assets/jajanan-lokal.jpg',
+  '/assets/jembatan-rel.jpg',
+  '/assets/kampung-silalas.jpg',
+  '/assets/masjid-silalas.jpg',
+  '/assets/rumah-qohwah.jpg'
+];
+
 function createDatabase(connectionString = process.env.DATABASE_URL) {
   if (!connectionString) {
     return {
@@ -117,6 +132,14 @@ function createDatabase(connectionString = process.env.DATABASE_URL) {
       CREATE UNIQUE INDEX IF NOT EXISTS idx_admins_username ON admins(LOWER(username));
       CREATE UNIQUE INDEX IF NOT EXISTS idx_quizzes_seed_key ON quizzes(seed_key) WHERE seed_key IS NOT NULL;
     `);
+
+    await pool.query(
+      `UPDATE questions
+       SET image_url = REGEXP_REPLACE(image_url, '\\.(jpg|jpeg)$', '.webp', 'i'),
+           updated_at = NOW()
+       WHERE image_url = ANY($1::text[])`,
+      [LEGACY_QUESTION_IMAGE_URLS]
+    );
 
     const existing = await pool.query('SELECT id FROM quizzes WHERE deleted_at IS NULL LIMIT 1');
     if (existing.rowCount === 0 && Array.isArray(defaultQuestions) && defaultQuestions.length) {

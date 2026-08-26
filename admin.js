@@ -276,7 +276,7 @@ function renderQuestionEditors() {
         </div>
         <div class="quiz-meta-fields">
           <label class="field field-wide"><span>Penjelasan jawaban</span><textarea data-key="explanation" rows="2" maxlength="500"></textarea></label>
-          <label class="field"><span>URL/path gambar</span><input data-key="imageUrl" maxlength="500" placeholder="assets/contoh.jpg" /></label>
+          <label class="field"><span>URL/path gambar</span><input data-key="imageUrl" maxlength="500" placeholder="assets/contoh.webp" /></label>
           <label class="field"><span>Deskripsi gambar</span><input data-key="altText" maxlength="250" /></label>
         </div>
         <div class="question-save-row"><button type="button" class="primary compact-button" data-save>${question.id ? 'Simpan perubahan' : 'Simpan soal baru'}</button></div>
@@ -422,7 +422,7 @@ function renderAdminQuestion(payload) {
   $('adminQuizRoomLabel').textContent = `Room ${adminState.roomCode}`;
   $('adminQuestionCategory').textContent = payload.question.category;
   $('adminQuestionText').textContent = payload.question.question;
-  $('adminQuestionImage').src = payload.question.image || '/assets/kampung-silalas.jpg';
+  $('adminQuestionImage').src = payload.question.image || '/assets/kampung-silalas.webp';
   $('adminQuestionImage').alt = payload.question.alt || '';
   $('adminQuestionAlt').textContent = payload.question.alt || '';
   $('adminAnswerList').replaceChildren(...payload.question.options.map((option, index) => {

@@ -14,7 +14,7 @@ const validQuestion = {
   timeLimitSeconds: 10,
   basePoints: 1000,
   explanation: 'Lokasinya berada di Jl. Mayang No. 10.',
-  imageUrl: 'assets/kampung-silalas.jpg',
+  imageUrl: 'assets/kampung-silalas.webp',
   altText: 'Kawasan Silalas'
 };
 

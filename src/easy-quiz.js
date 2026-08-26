@@ -20,7 +20,7 @@ const EASY_QUIZ = {
       options: ['Medan', 'Jakarta', 'Bandung', 'Surabaya'],
       correctOptionIndex: 0,
       explanation: 'Medan Simpang memperkenalkan kawasan dan cerita dari Kota Medan.',
-      imageUrl: 'assets/kampung-silalas.jpg',
+      imageUrl: 'assets/kampung-silalas.webp',
       altText: 'Suasana permukiman di Kota Medan'
     },
     {
@@ -29,7 +29,7 @@ const EASY_QUIZ = {
       options: ['Silalas', 'Kesawan', 'Belawan', 'Tembung'],
       correctOptionIndex: 0,
       explanation: 'Materi kuis mengajak peserta mengenal kawasan Silalas.',
-      imageUrl: 'assets/kampung-silalas.jpg',
+      imageUrl: 'assets/kampung-silalas.webp',
       altText: 'Suasana kawasan Silalas'
     },
     {
@@ -38,7 +38,7 @@ const EASY_QUIZ = {
       options: ['Sungai Deli', 'Sungai Musi', 'Sungai Kapuas', 'Sungai Ciliwung'],
       correctOptionIndex: 0,
       explanation: 'Kawasan Silalas berada di sekitar tepian Sungai Deli.',
-      imageUrl: 'assets/deli-riverview.jpg',
+      imageUrl: 'assets/deli-riverview.webp',
       altText: 'Pemandangan tepian Sungai Deli'
     },
     {
@@ -47,7 +47,7 @@ const EASY_QUIZ = {
       options: ['Berjalan menyusuri rute', 'Bermain sepak bola', 'Berenang', 'Naik pesawat'],
       correctOptionIndex: 0,
       explanation: 'Pengunjung dapat berjalan menyusuri rute untuk mengenal tempat dan kehidupan kawasan.',
-      imageUrl: 'assets/kampung-silalas.jpg',
+      imageUrl: 'assets/kampung-silalas.webp',
       altText: 'Rute berjalan kaki di kawasan Silalas'
     },
     {
@@ -56,7 +56,7 @@ const EASY_QUIZ = {
       options: ['5 rute', '2 rute', '8 rute', '10 rute'],
       correctOptionIndex: 0,
       explanation: 'Halaman Silalas menyediakan lima pilihan walking trail.',
-      imageUrl: 'assets/deli-riverview.jpg',
+      imageUrl: 'assets/deli-riverview.webp',
       altText: 'Salah satu rute walking trail Silalas'
     },
     {
@@ -65,7 +65,7 @@ const EASY_QUIZ = {
       options: ['Tempat makan', 'Tempat ibadah', 'Jembatan', 'Sekolah'],
       correctOptionIndex: 0,
       explanation: 'iEat menandai tempat makan atau kuliner yang dapat ditemui di rute.',
-      imageUrl: 'assets/jajanan-lokal.jpg',
+      imageUrl: 'assets/jajanan-lokal.webp',
       altText: 'Jajanan lokal di kawasan Silalas'
     },
     {
@@ -74,7 +74,7 @@ const EASY_QUIZ = {
       options: ['Tempat minum', 'Rumah sakit', 'Lapangan', 'Pemakaman'],
       correctOptionIndex: 0,
       explanation: 'iDrink menandai tempat singgah untuk menikmati minuman.',
-      imageUrl: 'assets/rumah-qohwah.jpg',
+      imageUrl: 'assets/rumah-qohwah.webp',
       altText: 'Rumah Qohwah sebagai salah satu tempat minum'
     },
     {
@@ -83,7 +83,7 @@ const EASY_QUIZ = {
       options: ['Melihat lokasi menarik', 'Membeli tiket pesawat', 'Bermain gim daring', 'Menginap di hotel'],
       correctOptionIndex: 0,
       explanation: 'iSee menandai situs atau lokasi menarik yang dapat dilihat sepanjang rute.',
-      imageUrl: 'assets/masjid-silalas.jpg',
+      imageUrl: 'assets/masjid-silalas.webp',
       altText: 'Salah satu situs yang dapat dilihat di Silalas'
     },
     {
@@ -92,7 +92,7 @@ const EASY_QUIZ = {
       options: ['iSee', 'iEat', 'iDrink', 'iSurprise'],
       correctOptionIndex: 0,
       explanation: 'SMP-SMA Kalam Kudus termasuk kategori iSee pada Trails 6 Koridor Adam Malik.',
-      imageUrl: 'assets/kampung-silalas.jpg',
+      imageUrl: 'assets/kampung-silalas.webp',
       altText: 'Kawasan yang dilalui dalam rute Medan Simpang'
     },
     {
@@ -101,7 +101,7 @@ const EASY_QUIZ = {
       options: ['Jl. Mayang No. 10, Sekip', 'Jl. Pala, Silalas', 'Jl. Guru Patimpus, Silalas', 'Jl. Sei Deli, Silalas'],
       correctOptionIndex: 0,
       explanation: 'SMP-SMA Kalam Kudus beralamat di Jl. Mayang No. 10, Kelurahan Sekip, Kecamatan Medan Petisah.',
-      imageUrl: 'assets/kampung-silalas.jpg',
+      imageUrl: 'assets/kampung-silalas.webp',
       altText: 'Lingkungan kawasan pada rute Medan Simpang'
     },
     {
@@ -110,7 +110,7 @@ const EASY_QUIZ = {
       options: ['Rumah Qohwah', 'Dapur Sedap Wangi', 'Masjid Al Muflihin', 'SMP-SMA Kalam Kudus'],
       correctOptionIndex: 0,
       explanation: 'Rumah Qohwah merupakan tempat minum dan salah satu titik awal Trails 1 Deli Riverside.',
-      imageUrl: 'assets/rumah-qohwah.jpg',
+      imageUrl: 'assets/rumah-qohwah.webp',
       altText: 'Rumah Qohwah di kawasan Silalas'
     },
     {
@@ -119,7 +119,7 @@ const EASY_QUIZ = {
       options: ['Dapur Sedap Wangi', 'Rumah Qohwah', 'Gereja Kalam Kudus', 'Jembatan Kereta Api'],
       correctOptionIndex: 0,
       explanation: 'Dapur Sedap Wangi adalah rumah makan dengan beragam pilihan masakan rumahan.',
-      imageUrl: 'assets/jajanan-lokal.jpg',
+      imageUrl: 'assets/jajanan-lokal.webp',
       altText: 'Kuliner lokal yang dapat ditemui di kawasan Silalas'
     },
     {
@@ -128,7 +128,7 @@ const EASY_QUIZ = {
       options: ['Sungai Deli', 'Sungai Musi', 'Sungai Kapuas', 'Sungai Asahan'],
       correctOptionIndex: 0,
       explanation: 'Jembatan Kereta Api tua tersebut melintang di atas Sungai Deli.',
-      imageUrl: 'assets/jembatan-rel.jpg',
+      imageUrl: 'assets/jembatan-rel.webp',
       altText: 'Jembatan rel kereta api tua di atas Sungai Deli'
     },
     {
@@ -137,7 +137,7 @@ const EASY_QUIZ = {
       options: ['Trail 4', 'Trail 1', 'Trail 2', 'Trail 6'],
       correctOptionIndex: 0,
       explanation: 'Trail 4 mengangkat tema Masjid Tua Silalas dan kawasan pemakaman bersejarah.',
-      imageUrl: 'assets/masjid-silalas.jpg',
+      imageUrl: 'assets/masjid-silalas.webp',
       altText: 'Masjid bersejarah di kawasan Silalas'
     }
   ].map((question, index) => ({
